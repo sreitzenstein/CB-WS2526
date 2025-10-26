@@ -91,7 +91,7 @@ Sprache:
 A und B sind die "Zählvariablen" -> Zwei Exponenten
 Beliebig viele As, Anders Beliebig viele Bs, C's in der Menge der B's, D's in der Menge der A's
 
-$ L = \{a^mb^nc^nd^m \| m \ge 1, n \ge 1\}$
+$L = \{a^mb^nc^nd^m \| m \ge 1, n \ge 1\}$
 
 ## A2.3: Kontextfreie Sprache (2P)
 
@@ -133,29 +133,29 @@ Entwickeln Sie eine kontextfreie Grammatik für die Sprache
 L = \lbrace a^ib^jc^k \; | \; i = j \lor j = k \rbrace
 ```
 
-$ L = L_1 \lor L_2$
+$L = L_1 \lor L_2$
 
-$ L_1 = \{ a^ib^ic^k \| i, k \ge 0\}$ gleich viele a und b
+$L_1 = \{ a^ib^ic^k \| i, k \ge 0\}$ gleich viele a und b
 
-$ L_2 = \{ a^ib^kc^k \| i, k \ge 0\}$ gleich viele b und c
+$L_2 = \{ a^ib^kc^k \| i, k \ge 0\}$ gleich viele b und c
 
 Produktionen:
 
-$ S -> L_1 \| L_2$
+$S -> L_1 \| L_2$
 
 ---
-$ L_1 -> A B$
+$L_1 -> A B$
 
-$ A -> a A b   | \epsilon$
+$A -> a A b   | \epsilon$
 
-$ B -> c B | \epsilon$
+$B -> c B | \epsilon$
 
 ---
-$ L_2 -> C D$
+$L_2 -> C D$
 
-$ C -> a C | \epsilon$
+$C -> a C | \epsilon$
 
-$ D -> b D c   | \epsilon$
+$D -> b D c   | \epsilon$
 
 
 Die L ist mehrdeutig für alle i = j = k, da diese sich über L1 und L2 ableiten lassen
@@ -164,11 +164,11 @@ Grammatik:
 
 $G = ($
 
- $   \{S, L_1, L_2, A, B, C, D \},$
+ $\{S, L_1, L_2, A, B, C, D \},$
 
- $   \{a,b,c\}, $
+ $\{a,b,c\}, $
 
-$   \{
+$\{
       (s-> L_1\|L_2), 
      (L_1 -> A B), 
       (A -> a Ab \| \epsilon),
@@ -178,9 +178,9 @@ $   \{
       ( D -> b D c \| \epsilon)
   \},$
 
-$   S$
+$S$
 
-$   )$
+$)$
 
 ![ndpda](bilder/b02/b02_ndpda.png)
 
