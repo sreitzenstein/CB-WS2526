@@ -14,8 +14,8 @@ stmt    :  vardecl
 vardecl :  ID ':=' expr  ;
 
 
-while   :  'while'  expr  'do'  stmt 'end';
-cond    :  'if'  expr 'do' stmt ('else do' stmt)? 'end' ;
+while   :  'while'  expr  'do'  stmt* 'end';
+cond    :  'if'  expr 'do' stmt* ('else do' stmt*)? 'end' ;
 
 expr    :  expr '*' expr
         |  expr '/' expr
