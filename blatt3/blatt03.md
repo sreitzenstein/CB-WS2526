@@ -26,8 +26,6 @@ node prettyparser.js
 
 also das war ein wenig auch um festzuhalten, wie ich das wiederhole. die anleitung zum ausführen ist in [prettyparser.js](prettyparser/prettyparser.js)
 
-Beispiele (die hab ich mir generieren lassen):
-
 ### example1
 
 ```
