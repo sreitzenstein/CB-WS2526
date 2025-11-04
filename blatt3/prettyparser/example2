@@ -1,0 +1,12 @@
+# Mathematical expressions with multiple operators
+x:=10  y   :=   20  z:=30 total:=x+y*z-5
+
+if total>500 do discount:=total*10/100 final:=total-discount
+
+while final>100 do if final!=0 do final:=final-1 end end  else do if total<100 do bonus:=50 else do bonus:=25 end final:=total+bonus end
+
+# String assignment
+message:="Calculation complete" status:="OK"
+
+# Nested madness
+a:=1  b:=2 c:=3 if a<b do if b<c do  result:=a+b+c  while result>0 do result:=result-1 end  end end

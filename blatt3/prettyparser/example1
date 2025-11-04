@@ -1,0 +1,4 @@
+# Badly formatted nested structures
+x:=10 y:=20 if x<y do result:=0 temp:=5 while result<10 do result:=result+1 temp:=temp+1
+end final:=result+temp else do result:=100  final:=result*2
+end output:=final+50
