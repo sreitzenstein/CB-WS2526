@@ -1,0 +1,28 @@
+Start    : ExpressionList EOF ;
+
+ExpressionList
+         : Expression ExpressionList
+         | /* ε */ ;
+
+Expression: Literal | ListExpr;
+
+Literal  : NUMBER | STRING | BOOL | ID;
+
+BOOL     : 'true' | 'false' ;
+
+ListExpr : '(' Head ExprSeq ')' ;
+
+ExprSeq  : Expression ExprSeq |  ε  ;
+
+Head     : ID 
+         | 'if' | 'def' | 'defn' | 'let' | 'do' | 'print' | 'str' | 'list'
+         | 'nth' | 'head' | 'tail'
+         | '+' | '-' | '*' | '/' | '>' | '<' | '='
+         ;
+
+// Lexer 
+ID       : [a-zA-Z][a-zA-Z0-9_-]* ;
+NUMBER   : [0-9]+ ;
+STRING   : '"' (~["\r\n] | '\\' . )* '"' ;
+COMMENT  : ';;' ~[\r\n]* -> skip ;
+WS       : [ \t\r\n]+ -> skip ;
