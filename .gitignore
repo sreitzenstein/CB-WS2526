@@ -9,6 +9,8 @@
 /dataSources/
 /dataSources.local.xml
 /.idea/
+/out/*
+*.pdf
 
 # node
 node_modules
