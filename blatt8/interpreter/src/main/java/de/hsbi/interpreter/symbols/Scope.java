@@ -1,0 +1,79 @@
+package de.hsbi.interpreter.symbols;
+
+import java.util.HashMap;
+import java.util.Map;
+
+/**
+ * represents a scope (context) in which symbols are defined
+ * scopes can be nested (e.g., global scope contains function scopes, which contain block scopes)
+ */
+public class Scope {
+    private String name;
+    private Scope parent;
+    private Map<String, Symbol> symbols;
+
+    public Scope(String name, Scope parent) {
+        this.name = name;
+        this.parent = parent;
+        this.symbols = new HashMap<>();
+    }
+
+    public String getName() {
+        return name;
+    }
+
+    public Scope getParent() {
+        return parent;
+    }
+
+    /**
+     * define a symbol in this scope
+     * @param symbol the symbol to define
+     * @throws RuntimeException if symbol already exists in this scope
+     */
+    public void define(Symbol symbol) {
+        if (symbols.containsKey(symbol.getName())) {
+            throw new RuntimeException("symbol '" + symbol.getName() + "' already defined in scope '" + name + "'");
+        }
+        symbols.put(symbol.getName(), symbol);
+    }
+
+    /**
+     * resolve a symbol by name in this scope or parent scopes
+     * @param name the name to look up
+     * @return the symbol, or null if not found
+     */
+    public Symbol resolve(String name) {
+        Symbol symbol = symbols.get(name);
+        if (symbol != null) {
+            return symbol;
+        }
+        if (parent != null) {
+            return parent.resolve(name);
+        }
+        return null;
+    }
+
+    /**
+     * resolve a symbol only in this scope (not parent scopes)
+     * @param name the name to look up
+     * @return the symbol, or null if not found
+     */
+    public Symbol resolveLocal(String name) {
+        return symbols.get(name);
+    }
+
+    /**
+     * check if a symbol exists in this scope (not parent scopes)
+     * @param name the name to check
+     * @return true if symbol exists in this scope
+     */
+    public boolean isDefined(String name) {
+        return symbols.containsKey(name);
+    }
+
+    @Override
+    public String toString() {
+        return "Scope{" + name + ", symbols=" + symbols.keySet() + "}";
+    }
+}

@@ -9,19 +9,22 @@
 /dataSources/
 /dataSources.local.xml
 /.idea/
-blatt8/interpreter/out
-interpreter/build.de.hsbi.interpreter
-/build.de.hsbi.interpreter/
-*build*
-/out/
 *.pdf
 
 # node
 node_modules
 package-lock.json
 
+# IDE and tools
 /.claude/
 /.vscode/
+blatt8/.claude/
+blatt8/.vscode/
 
-blatt8/interpreter/out
-blatt8/interpreter/build
+# Java build artifacts
+*.class
+blatt8/interpreter/out/
+blatt8/interpreter/build/
+
+/out
+blatt8/interpreter/.vscode
