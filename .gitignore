@@ -9,9 +9,12 @@
 /dataSources/
 /dataSources.local.xml
 /.idea/
-/out/*
+/out/
 *.pdf
 
 # node
 node_modules
 package-lock.json
+
+/.claude/
+/.vscode/
