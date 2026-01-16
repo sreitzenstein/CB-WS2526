@@ -10,8 +10,8 @@
 /dataSources.local.xml
 /.idea/
 blatt8/interpreter/out
-blatt8/interpreter/build
-/build/
+blatt8/interpreter/build.de.hsbi.interpreter
+/build.de.hsbi.interpreter/
 /out/
 *.pdf
 
