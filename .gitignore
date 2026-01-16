@@ -10,8 +10,9 @@
 /dataSources.local.xml
 /.idea/
 blatt8/interpreter/out
-blatt8/interpreter/build.de.hsbi.interpreter
+interpreter/build.de.hsbi.interpreter
 /build.de.hsbi.interpreter/
+*build*
 /out/
 *.pdf
 
@@ -21,3 +22,6 @@ package-lock.json
 
 /.claude/
 /.vscode/
+
+blatt8/interpreter/out
+blatt8/interpreter/build
