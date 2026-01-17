@@ -282,11 +282,22 @@ public class Main {
 
     private static void executeREPLInput(String input) {
         try {
-            // wrap input in dummy function
-            String wrappedInput = "void __repl_dummy__() { " + input + " }";
+            // check if input is a function or class definition
+            String trimmed = input.trim();
+            boolean isDefinition = trimmed.matches("(?s)^(class|struct)\\s+\\w+.*") ||
+                                  trimmed.matches("(?s)^\\w+\\s+\\w+\\s*\\([^)]*\\)\\s*\\{.*");
+
+            String sourceToParseCode;
+            if (isDefinition) {
+                // don't wrap definitions
+                sourceToParseCode = input;
+            } else {
+                // wrap input in dummy function for statements
+                sourceToParseCode = "void __repl_dummy__() { " + input + " }";
+            }
 
             // parse
-            CharStream charStream = CharStreams.fromString(wrappedInput);
+            CharStream charStream = CharStreams.fromString(sourceToParseCode);
             CPPLexer lexer = new CPPLexer(charStream);
             CommonTokenStream tokens = new CommonTokenStream(lexer);
             CPPParser parser = new CPPParser(tokens);
@@ -305,30 +316,43 @@ public class Main {
             ASTBuilder astBuilder = new ASTBuilder();
             Program program = (Program) astBuilder.visitProgram(programContext);
 
-            if (program == null || program.getFunctions().isEmpty()) {
+            if (program == null) {
                 System.err.println("Failed to parse input");
                 return;
             }
 
-            // get statements from dummy function
-            FunctionDecl dummyFunc = program.getFunctions().get(0);
-            BlockStmt block = dummyFunc.getBody();
+            if (isDefinition) {
+                // register functions from the definition
+                for (FunctionDecl func : program.getFunctions()) {
+                    interpreter.execute(program);
+                }
+                System.out.println("Defined.");
+            } else {
+                // execute statements from dummy function
+                if (program.getFunctions().isEmpty()) {
+                    System.err.println("Failed to parse input");
+                    return;
+                }
 
-            // check if single expression statement
-            boolean isExprStmt = (block.getStatements().size() == 1 &&
-                                  block.getStatements().get(0) instanceof ExprStmt);
+                FunctionDecl dummyFunc = program.getFunctions().get(0);
+                BlockStmt block = dummyFunc.getBody();
 
-            // execute statements
-            for (Statement stmt : block.getStatements()) {
-                stmt.accept(interpreter);
+                // check if single expression statement
+                boolean isExprStmt = (block.getStatements().size() == 1 &&
+                                      block.getStatements().get(0) instanceof ExprStmt);
 
-                // auto-print for expression statements
-                if (isExprStmt && stmt instanceof ExprStmt) {
-                    ExprStmt exprStmt = (ExprStmt) stmt;
-                    de.hsbi.interpreter.runtime.Value value = exprStmt.getExpression().accept(interpreter);
+                // execute statements
+                for (Statement stmt : block.getStatements()) {
+                    // auto-print for expression statements (evaluate before executing the statement)
+                    if (isExprStmt && stmt instanceof ExprStmt) {
+                        ExprStmt exprStmt = (ExprStmt) stmt;
+                        de.hsbi.interpreter.runtime.Value value = exprStmt.getExpression().accept(interpreter);
 
-                    if (value != null && value.getType().getBaseType() != Type.BaseType.VOID) {
-                        printValue(value);
+                        if (value != null && value.getType().getBaseType() != Type.BaseType.VOID) {
+                            printValue(value);
+                        }
+                    } else {
+                        stmt.accept(interpreter);
                     }
                 }
             }
