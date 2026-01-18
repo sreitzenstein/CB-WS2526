@@ -377,14 +377,19 @@ public class ASTBuilder extends CPPBaseVisitor<ASTNode> {
                 }
             } else if (opCtx.LPAREN() != null) {
                 // direct function call: expr(args)
-                // if expr is a VarExpr, convert to ConstructorCallExpr (function call)
                 List<Expression> arguments = opCtx.argumentList() != null
                         ? getArgumentList(opCtx.argumentList())
                         : new ArrayList<>();
 
                 if (expr instanceof VarExpr) {
+                    // function call: func(args)
                     String name = ((VarExpr) expr).getName();
                     expr = new ConstructorCallExpr(name, arguments);
+                } else if (expr instanceof MemberAccessExpr) {
+                    // method call via postfix: obj.method followed by (args)
+                    // convert to method call
+                    MemberAccessExpr memberAccess = (MemberAccessExpr) expr;
+                    expr = new MemberAccessExpr(memberAccess.getObject(), memberAccess.getMemberName(), arguments);
                 } else {
                     // This shouldn't happen with our grammar, but handle it anyway
                     throw new RuntimeException("Cannot call non-identifier expression as function");

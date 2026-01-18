@@ -87,7 +87,18 @@ public class Main {
                 content.append(line).append("\n");
             }
         }
-        return content.toString();
+        return preprocessSource(content.toString());
+    }
+
+    /**
+     * Simple preprocessor: removes #include directives and block comments
+     */
+    private static String preprocessSource(String source) {
+        // Remove #include lines
+        source = source.replaceAll("(?m)^\\s*#include\\s+[<\"][^>\"]*[>\"]\\s*$", "");
+        // Remove /* EXPECT ... */ comments (test expectations)
+        source = source.replaceAll("/\\*\\s*EXPECT[^*]*\\*+(?:[^/*][^*]*\\*+)*/", "");
+        return source;
     }
 
     private static Program parseProgram(String source) {

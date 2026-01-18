@@ -152,8 +152,8 @@ postfixExpr
 
 postfixOp
     : LPAREN argumentList? RPAREN                     // function call
+    | DOT IDENTIFIER LPAREN argumentList? RPAREN      // method call (must come before field access!)
     | DOT IDENTIFIER                                   // member access (field)
-    | DOT IDENTIFIER LPAREN argumentList? RPAREN      // method call
     ;
 
 // argument list

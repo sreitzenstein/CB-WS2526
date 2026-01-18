@@ -1,6 +1,8 @@
 package de.hsbi.interpreter.symbols;
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -11,11 +13,13 @@ public class Scope {
     private String name;
     private Scope parent;
     private Map<String, Symbol> symbols;
+    private Map<String, List<FunctionSymbol>> overloadedFunctions;
 
     public Scope(String name, Scope parent) {
         this.name = name;
         this.parent = parent;
         this.symbols = new HashMap<>();
+        this.overloadedFunctions = new HashMap<>();
     }
 
     public String getName() {
@@ -29,9 +33,20 @@ public class Scope {
     /**
      * define a symbol in this scope
      * @param symbol the symbol to define
-     * @throws RuntimeException if symbol already exists in this scope
+     * @throws RuntimeException if symbol already exists in this scope (except for function overloading)
      */
     public void define(Symbol symbol) {
+        // Special handling for function overloading
+        if (symbol instanceof FunctionSymbol) {
+            FunctionSymbol funcSymbol = (FunctionSymbol) symbol;
+            List<FunctionSymbol> overloads = overloadedFunctions.computeIfAbsent(
+                symbol.getName(), k -> new ArrayList<>());
+            overloads.add(funcSymbol);
+            // Also store in symbols map (first definition or overwrite for lookup)
+            symbols.put(symbol.getName(), symbol);
+            return;
+        }
+
         if (symbols.containsKey(symbol.getName())) {
             throw new RuntimeException("symbol '" + symbol.getName() + "' already defined in scope '" + name + "'");
         }
@@ -52,6 +67,28 @@ public class Scope {
             return parent.resolve(name);
         }
         return null;
+    }
+
+    /**
+     * resolve all overloaded functions by name in this scope or parent scopes
+     * @param name the function name to look up
+     * @return list of function symbols with this name, or empty list if not found
+     */
+    public List<FunctionSymbol> resolveOverloadedFunctions(String name) {
+        List<FunctionSymbol> result = new ArrayList<>();
+
+        // Check this scope
+        List<FunctionSymbol> local = overloadedFunctions.get(name);
+        if (local != null) {
+            result.addAll(local);
+        }
+
+        // Check parent scopes
+        if (parent != null) {
+            result.addAll(parent.resolveOverloadedFunctions(name));
+        }
+
+        return result;
     }
 
     /**

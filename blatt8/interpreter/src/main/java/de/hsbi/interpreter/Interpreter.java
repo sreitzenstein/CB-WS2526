@@ -250,8 +250,32 @@ public class Interpreter implements ASTVisitor<Value> {
                 currentEnv.define(node.getName(), copyValue(value));
             }
         } else {
-            // no initializer - use default value
-            value = Value.defaultValue(node.getType());
+            // no initializer - use default value or call default constructor for classes
+            if (node.getType().getBaseType() == Type.BaseType.CLASS) {
+                // create object with default constructor
+                ClassSymbol classSymbol = classes.get(node.getType().getClassName());
+                if (classSymbol != null) {
+                    ObjectValue obj = new ObjectValue(classSymbol);
+                    initializeObjectFields(obj, classSymbol);
+
+                    // call default constructor if exists
+                    if (classSymbol.getBaseClass() != null) {
+                        callBaseConstructor(obj, classSymbol.getBaseClass());
+                    }
+                    for (ConstructorSymbol constructor : classSymbol.getConstructors().values()) {
+                        if (constructor.getParameters().isEmpty()) {
+                            executeConstructor(constructor.getDeclaration(), obj, new ArrayList<>());
+                            break;
+                        }
+                    }
+
+                    value = new Value(node.getType(), obj);
+                } else {
+                    value = Value.defaultValue(node.getType());
+                }
+            } else {
+                value = Value.defaultValue(node.getType());
+            }
             currentEnv.define(node.getName(), value);
         }
 
@@ -528,9 +552,11 @@ public class Interpreter implements ASTVisitor<Value> {
         }
 
         // then check if this is a function call (not a constructor)
-        FunctionDecl func = functions.get(node.getClassName());
-        if (func != null) {
-            // this is actually a function call, not a constructor
+        // Use the resolved function from semantic analysis (handles overloading)
+        if (node.isFunctionCall()) {
+            FunctionSymbol funcSymbol = node.getResolvedFunction();
+            FunctionDecl func = funcSymbol.getDeclaration();
+
             // evaluate arguments
             List<Value> argValues = new ArrayList<>();
             for (Expression arg : node.getArguments()) {
@@ -556,6 +582,22 @@ public class Interpreter implements ASTVisitor<Value> {
 
         if (classSymbol == null) {
             throw new RuntimeError("class '" + node.getClassName() + "' not found");
+        }
+
+        // Handle implicit copy constructor
+        if (node.isImplicitCopy()) {
+            // Evaluate the source object
+            Value sourceValue = node.getArguments().get(0).accept(this);
+            ObjectValue sourceObj = sourceValue.getObjectValue();
+
+            // Create new object by copying all fields
+            ObjectValue newObj = new ObjectValue(classSymbol);
+            for (String fieldName : sourceObj.getFields().keySet()) {
+                Value fieldValue = sourceObj.getField(fieldName);
+                newObj.setField(fieldName, copyValue(fieldValue));
+            }
+
+            return new Value(new Type(node.getClassName()), newObj);
         }
 
         // create new object

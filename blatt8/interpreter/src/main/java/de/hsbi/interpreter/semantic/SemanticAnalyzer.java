@@ -566,18 +566,18 @@ public class SemanticAnalyzer implements ASTVisitor<Type> {
         }
 
         // then check if this is a function call (not a constructor)
-        Symbol symbol = symbolTable.resolve(node.getClassName());
-        if (symbol != null && symbol.getKind() == Symbol.SymbolKind.FUNCTION) {
+        List<FunctionSymbol> overloads = symbolTable.resolveOverloadedFunctions(node.getClassName());
+        if (!overloads.isEmpty()) {
             // this is actually a function call, not a constructor
-            FunctionSymbol function = (FunctionSymbol) symbol;
+            // find the best matching overload
+            FunctionSymbol function = findBestFunctionOverload(overloads, node.getArguments());
 
-            // check argument count
-            if (node.getArguments().size() != function.getParameters().size()) {
-                error("function '" + node.getClassName() + "': expected " + function.getParameters().size() + " arguments, got " + node.getArguments().size());
+            if (function == null) {
+                error("no matching function for call to '" + node.getClassName() + "'");
                 return null;
             }
 
-            // check argument types
+            // check argument types (for error messages)
             for (int i = 0; i < node.getArguments().size(); i++) {
                 Expression arg = node.getArguments().get(i);
                 Parameter param = function.getParameters().get(i);
@@ -597,6 +597,8 @@ public class SemanticAnalyzer implements ASTVisitor<Type> {
                 }
             }
 
+            // Store the resolved function for the interpreter
+            node.setResolvedFunction(function);
             node.setType(function.getType());
             return function.getType();
         }
@@ -615,6 +617,18 @@ public class SemanticAnalyzer implements ASTVisitor<Type> {
         if (constructor == null) {
             error("class '" + node.getClassName() + "': no matching constructor found");
             return null;
+        }
+
+        // Handle implicit copy constructor
+        if (constructor == ConstructorSymbol.IMPLICIT_COPY) {
+            // Just evaluate the argument type (already validated in findConstructor)
+            for (Expression arg : node.getArguments()) {
+                arg.accept(this);
+            }
+            node.setImplicitCopy(true);
+            Type type = new Type(node.getClassName());
+            node.setType(type);
+            return type;
         }
 
         // check argument types
@@ -685,7 +699,18 @@ public class SemanticAnalyzer implements ASTVisitor<Type> {
         if (t1 == null || t2 == null) {
             return false;
         }
-        return t1.equals(t2);
+        if (t1.equals(t2)) {
+            return true;
+        }
+        // check for inheritance: t2 can be assigned to t1 if t2 is derived from t1
+        if (t1.getBaseType() == Type.BaseType.CLASS && t2.getBaseType() == Type.BaseType.CLASS) {
+            ClassSymbol class1 = symbolTable.getClass(t1.getClassName());
+            ClassSymbol class2 = symbolTable.getClass(t2.getClassName());
+            if (class1 != null && class2 != null) {
+                return isDerivedFrom(class2, class1);
+            }
+        }
+        return false;
     }
 
     private boolean canConvertToBool(Type type) {
@@ -731,12 +756,22 @@ public class SemanticAnalyzer implements ASTVisitor<Type> {
     }
 
     private ConstructorSymbol findConstructor(ClassSymbol classSymbol, List<Expression> arguments) {
+        // first, evaluate argument types if not already set
+        List<Type> argTypes = new ArrayList<>();
+        for (Expression arg : arguments) {
+            Type argType = arg.getType();
+            if (argType == null) {
+                argType = arg.accept(this);
+            }
+            argTypes.add(argType);
+        }
+
         // find constructor with matching signature
         for (ConstructorSymbol constructor : classSymbol.getConstructors().values()) {
             if (constructor.getParameters().size() == arguments.size()) {
                 boolean match = true;
                 for (int i = 0; i < arguments.size(); i++) {
-                    Type argType = arguments.get(i).getType();
+                    Type argType = argTypes.get(i);
                     Type paramType = constructor.getParameters().get(i).getType();
                     if (argType == null || !typesMatch(paramType, argType)) {
                         match = false;
@@ -759,6 +794,21 @@ public class SemanticAnalyzer implements ASTVisitor<Type> {
             }
         }
 
+        // check for implicit copy constructor: C(C obj) or C(C& obj)
+        // If one argument of same class type (or derived), allow copy construction
+        if (arguments.size() == 1 && argTypes.size() == 1) {
+            Type argType = argTypes.get(0);
+            if (argType != null && argType.getBaseType() == Type.BaseType.CLASS) {
+                String argClassName = argType.getClassName();
+                if (argClassName.equals(classSymbol.getName()) ||
+                    isDerivedFrom(symbolTable.getClass(argClassName), classSymbol)) {
+                    // Return a marker for implicit copy constructor
+                    // We'll use null but handle it specially in the caller
+                    return ConstructorSymbol.IMPLICIT_COPY;
+                }
+            }
+        }
+
         return null;
     }
 
@@ -775,11 +825,12 @@ public class SemanticAnalyzer implements ASTVisitor<Type> {
                 // method with same name exists in base class
                 // check if signature matches
                 if (parametersMatch(method.getParameters(), baseMethod.getParameters())) {
-                    // signatures match - this is an override
-                    // check that base method is virtual
-                    if (!baseMethod.isVirtual()) {
-                        error("method '" + method.getName() + "' in class '" + classSymbol.getName() + "' overrides non-virtual method in base class");
-                    }
+                    // signatures match
+                    // In C++, a derived class can "hide" a non-virtual base method with a method
+                    // of the same signature. This is valid - it just means:
+                    // - If base method is virtual: dynamic dispatch applies
+                    // - If base method is not virtual: static dispatch (method hiding)
+                    // The derived class can also introduce 'virtual' on its own method
 
                     // check that return types match
                     if (!typesMatch(method.getType(), baseMethod.getType())) {
@@ -851,5 +902,61 @@ public class SemanticAnalyzer implements ASTVisitor<Type> {
         Type returnType = new Type(Type.BaseType.VOID);
         node.setType(returnType);
         return returnType;
+    }
+
+    /**
+     * Find the best matching function overload for the given arguments.
+     * Prefers non-reference parameters when argument is not an lvalue.
+     */
+    private FunctionSymbol findBestFunctionOverload(List<FunctionSymbol> overloads, List<Expression> arguments) {
+        // First evaluate argument types
+        List<Type> argTypes = new ArrayList<>();
+        List<Boolean> argIsLValue = new ArrayList<>();
+        for (Expression arg : arguments) {
+            argTypes.add(arg.accept(this));
+            argIsLValue.add(isLValue(arg));
+        }
+
+        FunctionSymbol bestMatch = null;
+        int bestScore = -1;
+
+        for (FunctionSymbol func : overloads) {
+            if (func.getParameters().size() != arguments.size()) {
+                continue; // wrong number of arguments
+            }
+
+            boolean matches = true;
+            int score = 0;
+
+            for (int i = 0; i < arguments.size(); i++) {
+                Type argType = argTypes.get(i);
+                Parameter param = func.getParameters().get(i);
+
+                if (argType == null || !typesMatch(param.getType(), argType)) {
+                    matches = false;
+                    break;
+                }
+
+                // Prefer non-reference parameter when argument is not an lvalue
+                if (param.isReference()) {
+                    if (!argIsLValue.get(i)) {
+                        // Reference parameter but argument is not an lvalue - not viable
+                        matches = false;
+                        break;
+                    }
+                    // Reference parameter with lvalue argument - OK but lower preference
+                } else {
+                    // Non-reference parameter - higher preference
+                    score++;
+                }
+            }
+
+            if (matches && score > bestScore) {
+                bestScore = score;
+                bestMatch = func;
+            }
+        }
+
+        return bestMatch;
     }
 }

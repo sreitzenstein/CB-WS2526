@@ -10,6 +10,9 @@ import java.util.List;
  * represents a constructor in the symbol table
  */
 public class ConstructorSymbol extends Symbol {
+    // Marker for implicit copy constructor
+    public static final ConstructorSymbol IMPLICIT_COPY = new ConstructorSymbol("__implicit_copy__", null, null, null);
+
     private List<Parameter> parameters;
     private ConstructorDecl declaration;
     private ClassSymbol owningClass;

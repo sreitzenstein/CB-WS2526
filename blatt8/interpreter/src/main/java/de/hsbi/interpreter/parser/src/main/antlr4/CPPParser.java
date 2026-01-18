@@ -2127,29 +2127,29 @@ public class CPPParser extends Parser {
 				match(DOT);
 				setState(269);
 				match(IDENTIFIER);
+				setState(270);
+				match(LPAREN);
+				setState(272);
+				_errHandler.sync(this);
+				_la = _input.LA(1);
+				if ((((_la) & ~0x3f) == 0 && ((1L << _la) & 4125584580608L) != 0)) {
+					{
+					setState(271);
+					argumentList();
+					}
+				}
+
+				setState(274);
+				match(RPAREN);
 				}
 				break;
 			case 3:
 				enterOuterAlt(_localctx, 3);
 				{
-				setState(270);
+				setState(275);
 				match(DOT);
-				setState(271);
-				match(IDENTIFIER);
-				setState(272);
-				match(LPAREN);
-				setState(274);
-				_errHandler.sync(this);
-				_la = _input.LA(1);
-				if ((((_la) & ~0x3f) == 0 && ((1L << _la) & 4125584580608L) != 0)) {
-					{
-					setState(273);
-					argumentList();
-					}
-				}
-
 				setState(276);
-				match(RPAREN);
+				match(IDENTIFIER);
 				}
 				break;
 			}
@@ -2432,7 +2432,7 @@ public class CPPParser extends Parser {
 		"\u0001\u0019\u0001\u0019\u0003\u0019\u00ff\b\u0019\u0001\u001a\u0001\u001a"+
 		"\u0005\u001a\u0103\b\u001a\n\u001a\f\u001a\u0106\t\u001a\u0001\u001b\u0001"+
 		"\u001b\u0003\u001b\u010a\b\u001b\u0001\u001b\u0001\u001b\u0001\u001b\u0001"+
-		"\u001b\u0001\u001b\u0001\u001b\u0001\u001b\u0003\u001b\u0113\b\u001b\u0001"+
+		"\u001b\u0001\u001b\u0003\u001b\u0111\b\u001b\u0001\u001b\u0001\u001b\u0001"+
 		"\u001b\u0003\u001b\u0116\b\u001b\u0001\u001c\u0001\u001c\u0001\u001c\u0005"+
 		"\u001c\u011b\b\u001c\n\u001c\f\u001c\u011e\t\u001c\u0001\u001d\u0001\u001d"+
 		"\u0001\u001d\u0001\u001d\u0001\u001d\u0001\u001d\u0001\u001d\u0001\u001d"+
@@ -2559,12 +2559,12 @@ public class CPPParser extends Parser {
 		"\u0000\u0000\u0000\u0107\u0109\u0005\u001f\u0000\u0000\u0108\u010a\u0003"+
 		"8\u001c\u0000\u0109\u0108\u0001\u0000\u0000\u0000\u0109\u010a\u0001\u0000"+
 		"\u0000\u0000\u010a\u010b\u0001\u0000\u0000\u0000\u010b\u0116\u0005 \u0000"+
-		"\u0000\u010c\u010d\u0005\u001e\u0000\u0000\u010d\u0116\u0005)\u0000\u0000"+
-		"\u010e\u010f\u0005\u001e\u0000\u0000\u010f\u0110\u0005)\u0000\u0000\u0110"+
-		"\u0112\u0005\u001f\u0000\u0000\u0111\u0113\u00038\u001c\u0000\u0112\u0111"+
-		"\u0001\u0000\u0000\u0000\u0112\u0113\u0001\u0000\u0000\u0000\u0113\u0114"+
-		"\u0001\u0000\u0000\u0000\u0114\u0116\u0005 \u0000\u0000\u0115\u0107\u0001"+
-		"\u0000\u0000\u0000\u0115\u010c\u0001\u0000\u0000\u0000\u0115\u010e\u0001"+
+		"\u0000\u010c\u010d\u0005\u001e\u0000\u0000\u010d\u010e\u0005)\u0000\u0000"+
+		"\u010e\u0110\u0005\u001f\u0000\u0000\u010f\u0111\u00038\u001c\u0000\u0110"+
+		"\u010f\u0001\u0000\u0000\u0000\u0110\u0111\u0001\u0000\u0000\u0000\u0111"+
+		"\u0112\u0001\u0000\u0000\u0000\u0112\u0116\u0005 \u0000\u0000\u0113\u0114"+
+		"\u0005\u001e\u0000\u0000\u0114\u0116\u0005)\u0000\u0000\u0115\u0107\u0001"+
+		"\u0000\u0000\u0000\u0115\u010c\u0001\u0000\u0000\u0000\u0115\u0113\u0001"+
 		"\u0000\u0000\u0000\u01167\u0001\u0000\u0000\u0000\u0117\u011c\u0003\""+
 		"\u0011\u0000\u0118\u0119\u0005$\u0000\u0000\u0119\u011b\u0003\"\u0011"+
 		"\u0000\u011a\u0118\u0001\u0000\u0000\u0000\u011b\u011e\u0001\u0000\u0000"+
@@ -2580,7 +2580,7 @@ public class CPPParser extends Parser {
 		"\u0121\u0001\u0000\u0000\u0000\u012b\u0125\u0001\u0000\u0000\u0000\u012c"+
 		";\u0001\u0000\u0000\u0000\u012d\u012e\u0007\u0006\u0000\u0000\u012e=\u0001"+
 		"\u0000\u0000\u0000 @BLT]djr{\u0085\u008a\u0096\u009c\u00a3\u00a8\u00b3"+
-		"\u00bd\u00c9\u00d0\u00d8\u00e0\u00e8\u00f0\u00f8\u00fe\u0104\u0109\u0112"+
+		"\u00bd\u00c9\u00d0\u00d8\u00e0\u00e8\u00f0\u00f8\u00fe\u0104\u0109\u0110"+
 		"\u0115\u011c\u0128\u012b";
 	public static final ATN _ATN =
 		new ATNDeserializer().deserialize(_serializedATN.toCharArray());

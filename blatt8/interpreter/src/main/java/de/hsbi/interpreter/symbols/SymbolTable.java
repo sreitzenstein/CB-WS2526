@@ -1,6 +1,7 @@
 package de.hsbi.interpreter.symbols;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -68,6 +69,15 @@ public class SymbolTable {
      */
     public Symbol resolveLocal(String name) {
         return currentScope.resolveLocal(name);
+    }
+
+    /**
+     * resolve all overloaded functions by name
+     * @param name the function name to look up
+     * @return list of function symbols with this name
+     */
+    public List<FunctionSymbol> resolveOverloadedFunctions(String name) {
+        return currentScope.resolveOverloadedFunctions(name);
     }
 
     /**
