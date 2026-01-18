@@ -44,6 +44,15 @@ public class Main {
                 SymbolTableBuilder symbolTableBuilder = new SymbolTableBuilder();
                 symbolTable = symbolTableBuilder.build(program);
 
+                // check for symbol table building errors
+                if (symbolTableBuilder.hasErrors()) {
+                    System.err.println("Semantic errors:");
+                    for (String error : symbolTableBuilder.getErrors()) {
+                        System.err.println("  " + error);
+                    }
+                    System.exit(1);
+                }
+
                 // semantic analysis
                 SemanticAnalyzer semanticAnalyzer = new SemanticAnalyzer(symbolTable);
                 boolean success = semanticAnalyzer.analyze(program);

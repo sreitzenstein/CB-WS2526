@@ -906,7 +906,8 @@ public class SemanticAnalyzer implements ASTVisitor<Type> {
 
     /**
      * Find the best matching function overload for the given arguments.
-     * Prefers non-reference parameters when argument is not an lvalue.
+     * Returns null and reports error if call is ambiguous.
+     * Prefers non-reference parameters when argument is not an lvalue (unambiguous case).
      */
     private FunctionSymbol findBestFunctionOverload(List<FunctionSymbol> overloads, List<Expression> arguments) {
         // First evaluate argument types
@@ -917,8 +918,8 @@ public class SemanticAnalyzer implements ASTVisitor<Type> {
             argIsLValue.add(isLValue(arg));
         }
 
-        FunctionSymbol bestMatch = null;
-        int bestScore = -1;
+        // Collect all viable overloads
+        List<FunctionSymbol> viableOverloads = new ArrayList<>();
 
         for (FunctionSymbol func : overloads) {
             if (func.getParameters().size() != arguments.size()) {
@@ -926,7 +927,6 @@ public class SemanticAnalyzer implements ASTVisitor<Type> {
             }
 
             boolean matches = true;
-            int score = 0;
 
             for (int i = 0; i < arguments.size(); i++) {
                 Type argType = argTypes.get(i);
@@ -937,26 +937,72 @@ public class SemanticAnalyzer implements ASTVisitor<Type> {
                     break;
                 }
 
-                // Prefer non-reference parameter when argument is not an lvalue
-                if (param.isReference()) {
-                    if (!argIsLValue.get(i)) {
-                        // Reference parameter but argument is not an lvalue - not viable
-                        matches = false;
-                        break;
-                    }
-                    // Reference parameter with lvalue argument - OK but lower preference
-                } else {
-                    // Non-reference parameter - higher preference
-                    score++;
+                // Reference parameter requires lvalue argument
+                if (param.isReference() && !argIsLValue.get(i)) {
+                    matches = false;
+                    break;
                 }
             }
 
-            if (matches && score > bestScore) {
-                bestScore = score;
-                bestMatch = func;
+            if (matches) {
+                viableOverloads.add(func);
             }
         }
 
-        return bestMatch;
+        if (viableOverloads.isEmpty()) {
+            return null; // no matching function
+        }
+
+        if (viableOverloads.size() == 1) {
+            return viableOverloads.get(0); // unambiguous
+        }
+
+        // Multiple viable overloads - check for ambiguity
+        // For f(int) vs f(int&) with an lvalue argument, both are viable and it's ambiguous
+        // Check if there's a uniquely best match based on reference vs non-reference
+
+        // Count how many arguments could go either way (lvalue that matches both ref and non-ref)
+        boolean hasAmbiguousArg = false;
+        for (int i = 0; i < arguments.size(); i++) {
+            if (argIsLValue.get(i)) {
+                // Check if there's both a ref and non-ref overload for this position
+                boolean hasRef = false;
+                boolean hasNonRef = false;
+                for (FunctionSymbol func : viableOverloads) {
+                    if (func.getParameters().get(i).isReference()) {
+                        hasRef = true;
+                    } else {
+                        hasNonRef = true;
+                    }
+                }
+                if (hasRef && hasNonRef) {
+                    hasAmbiguousArg = true;
+                    break;
+                }
+            }
+        }
+
+        if (hasAmbiguousArg) {
+            // Ambiguous call - report error
+            StringBuilder sb = new StringBuilder();
+            sb.append("call is ambiguous between: ");
+            for (int i = 0; i < viableOverloads.size(); i++) {
+                if (i > 0) sb.append(", ");
+                FunctionSymbol f = viableOverloads.get(i);
+                sb.append(f.getName()).append("(");
+                for (int j = 0; j < f.getParameters().size(); j++) {
+                    if (j > 0) sb.append(", ");
+                    Parameter p = f.getParameters().get(j);
+                    sb.append(p.getType());
+                    if (p.isReference()) sb.append("&");
+                }
+                sb.append(")");
+            }
+            error(sb.toString());
+            return null;
+        }
+
+        // If no ambiguous args, just return the first viable (should not happen in practice)
+        return viableOverloads.get(0);
     }
 }

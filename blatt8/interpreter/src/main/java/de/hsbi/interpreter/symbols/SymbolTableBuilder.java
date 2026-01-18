@@ -2,6 +2,7 @@ package de.hsbi.interpreter.symbols;
 
 import de.hsbi.interpreter.ast.*;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -14,15 +15,29 @@ public class SymbolTableBuilder implements ASTVisitor<Void> {
     private SymbolTable symbolTable;
     private ClassSymbol currentClass;
     private boolean firstPass;
+    private List<String> errors;
 
     public SymbolTableBuilder() {
         this.symbolTable = new SymbolTable();
         this.currentClass = null;
         this.firstPass = true;
+        this.errors = new ArrayList<>();
     }
 
     public SymbolTable getSymbolTable() {
         return symbolTable;
+    }
+
+    public List<String> getErrors() {
+        return errors;
+    }
+
+    public boolean hasErrors() {
+        return !errors.isEmpty();
+    }
+
+    private void error(String message) {
+        errors.add(message);
     }
 
     /**
@@ -161,8 +176,13 @@ public class SymbolTableBuilder implements ASTVisitor<Void> {
     @Override
     public Void visitVarDecl(VarDecl node) {
         if (!firstPass) {
-            VarSymbol varSymbol = new VarSymbol(node.getName(), node.getType(), node.isReference());
-            symbolTable.define(varSymbol);
+            // Check if variable already exists in current scope
+            if (symbolTable.getCurrentScope().isDefined(node.getName())) {
+                error("variable '" + node.getName() + "' is already defined in this scope");
+            } else {
+                VarSymbol varSymbol = new VarSymbol(node.getName(), node.getType(), node.isReference());
+                symbolTable.define(varSymbol);
+            }
 
             // visit initializer if present
             if (node.getInitializer() != null) {
