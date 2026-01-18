@@ -33,30 +33,52 @@ Dies generiert:
 - `CPPVisitor.java` - Visitor Interface
 - `CPPBaseVisitor.java` - Basis-Visitor-Implementierung
 
-## Kompilierung
+## Build & Ausführung
 
-**Windows:**
+### Schnellstart
+
 ```bash
-javac -cp "lib/antlr-4.13.1-complete.jar;src/main/java" -d out/production src/main/java/de/hsbi/interpreter/**/*.java src/main/java/de/hsbi/interpreter/*.java
+cd interpreter
+
+# Einmalig: Fat JAR bauen (enthält alle Abhängigkeiten)
+./build.sh
+
+# Ausführen
+java -jar interpreter.jar              # REPL-Modus
+java -jar interpreter.jar program.cpp  # Datei ausführen
 ```
 
-**Linux/Mac:**
+### Build-Script (`build.sh`)
+
+Das Build-Script kompiliert den Interpreter und erstellt ein Fat JAR:
+
 ```bash
-javac -cp "lib/antlr-4.13.1-complete.jar:src/main/java" -d out/production src/main/java/de/hsbi/interpreter/**/*.java src/main/java/de/hsbi/interpreter/*.java
+./build.sh
 ```
 
-## Ausführung
+Ausgabe:
+```
+=== C++ Interpreter Build ===
 
-### REPL-Modus (interaktiv)
+[1/4] Cleaning output directory...
+[2/4] Compiling Java sources...
+[3/4] Extracting ANTLR runtime classes...
+[4/4] Creating Fat JAR...
 
-**Windows:**
-```bash
-java -cp "lib/antlr-4.13.1-complete.jar;out/production" de.hsbi.interpreter.Main
+=== Build complete! ===
+Created: interpreter.jar (452K)
 ```
 
-**Linux/Mac:**
+### Ausführung
+
+**REPL-Modus (interaktiv):**
 ```bash
-java -cp "lib/antlr-4.13.1-complete.jar:out/production" de.hsbi.interpreter.Main
+java -jar interpreter.jar
+```
+
+**Datei-Modus:**
+```bash
+java -jar interpreter.jar test.cpp
 ```
 
 Der REPL startet mit:
@@ -71,21 +93,17 @@ Enter C++ statements. Type 'exit' or 'quit' to exit.
 >>>
 ```
 
-### Datei-Modus
+### Alternative: Ohne Fat JAR
 
-**Windows:**
-```bash
-java -cp "lib/antlr-4.13.1-complete.jar;out/production" de.hsbi.interpreter.Main <datei.cpp>
-```
+Falls du ohne Fat JAR arbeiten möchtest (z.B. während der Entwicklung):
 
-**Linux/Mac:**
 ```bash
-java -cp "lib/antlr-4.13.1-complete.jar:out/production" de.hsbi.interpreter.Main <datei.cpp>
-```
+# Kompilieren
+./compile.sh
 
-Beispiel:
-```bash
-java -cp "lib/antlr-4.13.1-complete.jar;out/production" de.hsbi.interpreter.Main ../test.cpp
+# Ausführen (run.sh erkennt automatisch Windows/Linux)
+./run.sh              # REPL
+./run.sh program.cpp  # Datei
 ```
 
 ## REPL Bedienung
@@ -326,17 +344,17 @@ Der Interpreter unterstützt NICHT:
 
 ## Tests
 
-Beispiel-Tests befinden sich in `../test.cpp` und `../tests/`.
+Beispiel-Tests befinden sich in `test.cpp` und `../tests/`.
 
 Test ausführen:
 ```bash
-java -cp "lib/antlr-4.13.1-complete.jar;out/production" de.hsbi.interpreter.Main ../test.cpp
+java -jar interpreter.jar test.cpp
 ```
 
 ## Abhängigkeiten
 
 - **Java:** Version 21 oder höher
-- **ANTLR Runtime:** 4.13.1 (im `lib/` Verzeichnis enthalten, wird zur Ausführung benötigt)
+- **ANTLR Runtime:** 4.13.1 (im `lib/` Verzeichnis enthalten, wird ins Fat JAR eingebettet)
 
 ## Dokumentation
 
