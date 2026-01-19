@@ -50,7 +50,9 @@ public class ASTBuilder extends CPPBaseVisitor<ASTNode> {
             }
         }
 
-        return new ClassDecl(name, baseClass, fields, methods, constructors);
+        ClassDecl classDecl = new ClassDecl(name, baseClass, fields, methods, constructors);
+        classDecl.setPosition(ctx.getStart().getLine(), ctx.getStart().getCharPositionInLine());
+        return classDecl;
     }
 
     @Override
@@ -58,7 +60,9 @@ public class ASTBuilder extends CPPBaseVisitor<ASTNode> {
         Type type = (Type) visit(ctx.type());
         String name = ctx.IDENTIFIER().getText();
         // fields cannot be references and have no initializer in our grammar
-        return new VarDecl(type, false, name, null);
+        VarDecl field = new VarDecl(type, false, name, null);
+        field.setPosition(ctx.getStart().getLine(), ctx.getStart().getCharPositionInLine());
+        return field;
     }
 
     @Override
@@ -71,7 +75,9 @@ public class ASTBuilder extends CPPBaseVisitor<ASTNode> {
                 : new ArrayList<>();
         BlockStmt body = (BlockStmt) visit(ctx.block());
 
-        return new MethodDecl(isVirtual, returnType, name, parameters, body);
+        MethodDecl method = new MethodDecl(isVirtual, returnType, name, parameters, body);
+        method.setPosition(ctx.getStart().getLine(), ctx.getStart().getCharPositionInLine());
+        return method;
     }
 
     @Override
@@ -82,7 +88,9 @@ public class ASTBuilder extends CPPBaseVisitor<ASTNode> {
                 : new ArrayList<>();
         BlockStmt body = (BlockStmt) visit(ctx.block());
 
-        return new ConstructorDecl(name, parameters, body);
+        ConstructorDecl constructor = new ConstructorDecl(name, parameters, body);
+        constructor.setPosition(ctx.getStart().getLine(), ctx.getStart().getCharPositionInLine());
+        return constructor;
     }
 
     @Override
@@ -94,7 +102,9 @@ public class ASTBuilder extends CPPBaseVisitor<ASTNode> {
                 : new ArrayList<>();
         BlockStmt body = (BlockStmt) visit(ctx.block());
 
-        return new FunctionDecl(returnType, name, parameters, body);
+        FunctionDecl func = new FunctionDecl(returnType, name, parameters, body);
+        func.setPosition(ctx.getStart().getLine(), ctx.getStart().getCharPositionInLine());
+        return func;
     }
 
     // helper method to extract parameter list
@@ -174,7 +184,9 @@ public class ASTBuilder extends CPPBaseVisitor<ASTNode> {
                 ? (Expression) visit(ctx.expression())
                 : null;
 
-        return new VarDecl(type, isReference, name, initializer);
+        VarDecl varDecl = new VarDecl(type, isReference, name, initializer);
+        varDecl.setPosition(ctx.getStart().getLine(), ctx.getStart().getCharPositionInLine());
+        return varDecl;
     }
 
     @Override
@@ -200,7 +212,9 @@ public class ASTBuilder extends CPPBaseVisitor<ASTNode> {
         Expression value = ctx.expression() != null
                 ? (Expression) visit(ctx.expression())
                 : null;
-        return new ReturnStmt(value);
+        ReturnStmt stmt = new ReturnStmt(value);
+        stmt.setPosition(ctx.getStart().getLine(), ctx.getStart().getCharPositionInLine());
+        return stmt;
     }
 
     @Override
@@ -224,7 +238,9 @@ public class ASTBuilder extends CPPBaseVisitor<ASTNode> {
 
         if (ctx.assignmentExpr() != null) {
             Expression right = (Expression) visit(ctx.assignmentExpr());
-            return new AssignExpr(left, right);
+            AssignExpr assign = new AssignExpr(left, right);
+            assign.setPosition(ctx.getStart().getLine(), ctx.getStart().getCharPositionInLine());
+            return assign;
         }
 
         return left;
@@ -370,10 +386,14 @@ public class ASTBuilder extends CPPBaseVisitor<ASTNode> {
                     List<Expression> arguments = opCtx.argumentList() != null
                             ? getArgumentList(opCtx.argumentList())
                             : new ArrayList<>();
-                    expr = new MemberAccessExpr(expr, memberName, arguments);
+                    MemberAccessExpr memberExpr = new MemberAccessExpr(expr, memberName, arguments);
+                    memberExpr.setPosition(opCtx.getStart().getLine(), opCtx.getStart().getCharPositionInLine());
+                    expr = memberExpr;
                 } else {
                     // field access: obj.field
-                    expr = new MemberAccessExpr(expr, memberName);
+                    MemberAccessExpr memberExpr = new MemberAccessExpr(expr, memberName);
+                    memberExpr.setPosition(opCtx.getStart().getLine(), opCtx.getStart().getCharPositionInLine());
+                    expr = memberExpr;
                 }
             } else if (opCtx.LPAREN() != null) {
                 // direct function call: expr(args)
@@ -384,12 +404,16 @@ public class ASTBuilder extends CPPBaseVisitor<ASTNode> {
                 if (expr instanceof VarExpr) {
                     // function call: func(args)
                     String name = ((VarExpr) expr).getName();
-                    expr = new ConstructorCallExpr(name, arguments);
+                    ConstructorCallExpr call = new ConstructorCallExpr(name, arguments);
+                    call.setPosition(expr.getLine(), expr.getColumn());
+                    expr = call;
                 } else if (expr instanceof MemberAccessExpr) {
                     // method call via postfix: obj.method followed by (args)
                     // convert to method call
                     MemberAccessExpr memberAccess = (MemberAccessExpr) expr;
-                    expr = new MemberAccessExpr(memberAccess.getObject(), memberAccess.getMemberName(), arguments);
+                    MemberAccessExpr methodCall = new MemberAccessExpr(memberAccess.getObject(), memberAccess.getMemberName(), arguments);
+                    methodCall.setPosition(memberAccess.getLine(), memberAccess.getColumn());
+                    expr = methodCall;
                 } else {
                     // This shouldn't happen with our grammar, but handle it anyway
                     throw new RuntimeException("Cannot call non-identifier expression as function");
@@ -413,10 +437,14 @@ public class ASTBuilder extends CPPBaseVisitor<ASTNode> {
 
             // we treat this as constructor call for now
             // semantic analysis will determine if it's actually a function call
-            return new ConstructorCallExpr(name, arguments);
+            ConstructorCallExpr call = new ConstructorCallExpr(name, arguments);
+            call.setPosition(ctx.getStart().getLine(), ctx.getStart().getCharPositionInLine());
+            return call;
         } else if (ctx.IDENTIFIER() != null) {
             // variable reference
-            return new VarExpr(ctx.IDENTIFIER().getText());
+            VarExpr var = new VarExpr(ctx.IDENTIFIER().getText());
+            var.setPosition(ctx.getStart().getLine(), ctx.getStart().getCharPositionInLine());
+            return var;
         } else if (ctx.LPAREN() != null) {
             // parenthesized expression
             return visit(ctx.expression());

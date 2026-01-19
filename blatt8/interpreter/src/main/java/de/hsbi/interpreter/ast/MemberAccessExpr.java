@@ -1,5 +1,6 @@
 package de.hsbi.interpreter.ast;
 
+import de.hsbi.interpreter.symbols.MethodSymbol;
 import java.util.List;
 
 /**
@@ -11,6 +12,7 @@ public class MemberAccessExpr extends Expression {
     private String memberName;
     private boolean isMethodCall;
     private List<Expression> arguments; // null if not a method call
+    private MethodSymbol resolvedMethod; // resolved method overload (set during semantic analysis)
 
     // for field access
     public MemberAccessExpr(Expression object, String memberName) {
@@ -42,6 +44,14 @@ public class MemberAccessExpr extends Expression {
 
     public List<Expression> getArguments() {
         return arguments;
+    }
+
+    public MethodSymbol getResolvedMethod() {
+        return resolvedMethod;
+    }
+
+    public void setResolvedMethod(MethodSymbol resolvedMethod) {
+        this.resolvedMethod = resolvedMethod;
     }
 
     @Override

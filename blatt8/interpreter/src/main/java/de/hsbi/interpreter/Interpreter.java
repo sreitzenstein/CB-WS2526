@@ -71,8 +71,8 @@ public class Interpreter implements ASTVisitor<Value> {
                     // parameter is a reference - create reference value
                     currentEnv.define(param.getName(), new Value(arg));
                 } else {
-                    // parameter is not a reference - copy the value
-                    currentEnv.define(param.getName(), copyValue(arg));
+                    // parameter is not a reference - copy the value (with slicing)
+                    currentEnv.define(param.getName(), copyValueWithSlicing(arg, param.getType()));
                 }
             }
 
@@ -100,13 +100,19 @@ public class Interpreter implements ASTVisitor<Value> {
         Environment previousEnv = currentEnv;
         currentEnv = methodEnv;
 
+        // collect parameter names for shadowing check
+        java.util.Set<String> parameterNames = new java.util.HashSet<>();
+        for (Parameter param : method.getParameters()) {
+            parameterNames.add(param.getName());
+        }
+
         try {
             // make object fields accessible in method scope
             for (Map.Entry<String, Value> field : obj.getFields().entrySet()) {
                 currentEnv.define(field.getKey(), field.getValue());
             }
 
-            // bind parameters
+            // bind parameters (overwrite fields if same name - parameter shadows field)
             for (int i = 0; i < method.getParameters().size(); i++) {
                 Parameter param = method.getParameters().get(i);
                 Value arg = arguments.get(i);
@@ -115,8 +121,8 @@ public class Interpreter implements ASTVisitor<Value> {
                     // parameter is a reference - create reference value
                     currentEnv.define(param.getName(), new Value(arg));
                 } else {
-                    // parameter is not a reference - copy the value
-                    currentEnv.define(param.getName(), copyValue(arg));
+                    // parameter is not a reference - copy the value (with slicing)
+                    currentEnv.define(param.getName(), copyValueWithSlicing(arg, param.getType()));
                 }
             }
 
@@ -125,9 +131,9 @@ public class Interpreter implements ASTVisitor<Value> {
                 method.getBody().accept(this);
             }
 
-            // copy back field values from environment
+            // copy back field values from environment (but not shadowed by parameters)
             for (Map.Entry<String, Value> field : obj.getFields().entrySet()) {
-                if (currentEnv.has(field.getKey())) {
+                if (!parameterNames.contains(field.getKey()) && currentEnv.has(field.getKey())) {
                     Value updatedValue = currentEnv.get(field.getKey());
                     obj.setField(field.getKey(), updatedValue);
                 }
@@ -137,9 +143,9 @@ public class Interpreter implements ASTVisitor<Value> {
             return Value.defaultValue(method.getReturnType());
 
         } catch (ReturnException e) {
-            // copy back field values before returning
+            // copy back field values before returning (but not shadowed by parameters)
             for (Map.Entry<String, Value> field : obj.getFields().entrySet()) {
-                if (currentEnv.has(field.getKey())) {
+                if (!parameterNames.contains(field.getKey()) && currentEnv.has(field.getKey())) {
                     Value updatedValue = currentEnv.get(field.getKey());
                     obj.setField(field.getKey(), updatedValue);
                 }
@@ -159,13 +165,19 @@ public class Interpreter implements ASTVisitor<Value> {
         Environment previousEnv = currentEnv;
         currentEnv = constructorEnv;
 
+        // collect parameter names for shadowing check
+        java.util.Set<String> parameterNames = new java.util.HashSet<>();
+        for (Parameter param : constructor.getParameters()) {
+            parameterNames.add(param.getName());
+        }
+
         try {
             // make object fields accessible in constructor scope
             for (Map.Entry<String, Value> field : obj.getFields().entrySet()) {
                 currentEnv.define(field.getKey(), field.getValue());
             }
 
-            // bind parameters
+            // bind parameters (overwrite fields if same name - parameter shadows field)
             for (int i = 0; i < constructor.getParameters().size(); i++) {
                 Parameter param = constructor.getParameters().get(i);
                 Value arg = arguments.get(i);
@@ -174,8 +186,8 @@ public class Interpreter implements ASTVisitor<Value> {
                     // parameter is a reference - create reference value
                     currentEnv.define(param.getName(), new Value(arg));
                 } else {
-                    // parameter is not a reference - copy the value
-                    currentEnv.define(param.getName(), copyValue(arg));
+                    // parameter is not a reference - copy the value (with slicing)
+                    currentEnv.define(param.getName(), copyValueWithSlicing(arg, param.getType()));
                 }
             }
 
@@ -184,9 +196,9 @@ public class Interpreter implements ASTVisitor<Value> {
                 constructor.getBody().accept(this);
             }
 
-            // copy back field values from environment
+            // copy back field values from environment (but not shadowed by parameters)
             for (Map.Entry<String, Value> field : obj.getFields().entrySet()) {
-                if (currentEnv.has(field.getKey())) {
+                if (!parameterNames.contains(field.getKey()) && currentEnv.has(field.getKey())) {
                     Value updatedValue = currentEnv.get(field.getKey());
                     obj.setField(field.getKey(), updatedValue);
                 }
@@ -195,7 +207,7 @@ public class Interpreter implements ASTVisitor<Value> {
         } catch (ReturnException e) {
             // constructors shouldn't return values, but handle it anyway
             for (Map.Entry<String, Value> field : obj.getFields().entrySet()) {
-                if (currentEnv.has(field.getKey())) {
+                if (!parameterNames.contains(field.getKey()) && currentEnv.has(field.getKey())) {
                     Value updatedValue = currentEnv.get(field.getKey());
                     obj.setField(field.getKey(), updatedValue);
                 }
@@ -246,8 +258,8 @@ public class Interpreter implements ASTVisitor<Value> {
                 // create reference to the value
                 currentEnv.define(node.getName(), new Value(value));
             } else {
-                // copy the value
-                currentEnv.define(node.getName(), copyValue(value));
+                // copy the value (with slicing if assigning derived to base)
+                currentEnv.define(node.getName(), copyValueWithSlicing(value, node.getType()));
             }
         } else {
             // no initializer - use default value or call default constructor for classes
@@ -262,7 +274,7 @@ public class Interpreter implements ASTVisitor<Value> {
                     if (classSymbol.getBaseClass() != null) {
                         callBaseConstructor(obj, classSymbol.getBaseClass());
                     }
-                    for (ConstructorSymbol constructor : classSymbol.getConstructors().values()) {
+                    for (ConstructorSymbol constructor : classSymbol.getConstructors()) {
                         if (constructor.getParameters().isEmpty()) {
                             executeConstructor(constructor.getDeclaration(), obj, new ArrayList<>());
                             break;
@@ -502,18 +514,35 @@ public class Interpreter implements ASTVisitor<Value> {
         ObjectValue obj = objValue.getObjectValue();
 
         if (node.isMethodCall()) {
-            // method call - resolve virtual dispatch
-            ClassSymbol objClass = obj.getClassSymbol();
-            MethodSymbol method = objClass.lookupMethod(node.getMemberName());
+            // Use resolved method from semantic analysis (handles overloading)
+            MethodSymbol method = node.getResolvedMethod();
 
             if (method == null) {
-                throw new RuntimeError("method '" + node.getMemberName() + "' not found in class '" + objClass.getName() + "'");
+                // Fallback to lookup if not resolved (shouldn't happen after semantic analysis)
+                Type staticType = node.getObject().getType();
+                ClassSymbol staticClass = classes.get(staticType.getClassName());
+                method = staticClass.lookupMethod(node.getMemberName());
             }
 
+            if (method == null) {
+                throw new RuntimeError("method '" + node.getMemberName() + "' not found");
+            }
+
+            // Get the STATIC type from the expression (the declared type of the reference/variable)
+            Type staticType = node.getObject().getType();
+            ClassSymbol staticClass = classes.get(staticType.getClassName());
+
+            // Check if the method (or any ancestor's version) is virtual
+            boolean isVirtual = isMethodVirtual(staticClass, node.getMemberName());
+
             // resolve virtual method (if the method is virtual, use dynamic dispatch)
-            if (method.isVirtual()) {
-                // dynamic dispatch: use the actual runtime type
-                method = obj.getClassSymbol().lookupMethod(node.getMemberName());
+            if (isVirtual) {
+                // dynamic dispatch: find matching method in the actual runtime type
+                // We need to find a method with the same signature in the derived class
+                MethodSymbol dynamicMethod = findMatchingMethod(obj.getClassSymbol(), node.getMemberName(), method);
+                if (dynamicMethod != null) {
+                    method = dynamicMethod;
+                }
             }
 
             // evaluate arguments
@@ -528,7 +557,7 @@ public class Interpreter implements ASTVisitor<Value> {
                 if (param.isReference()) {
                     argValues.add(argValue);
                 } else {
-                    argValues.add(copyValue(argValue));
+                    argValues.add(copyValueWithSlicing(argValue, param.getType()));
                 }
             }
 
@@ -684,19 +713,60 @@ public class Interpreter implements ASTVisitor<Value> {
     }
 
     private Value copyValue(Value value) {
-        if (value.getType().getBaseType() == Type.BaseType.CLASS) {
-            // deep copy object (slicing)
-            ObjectValue original = value.getObjectValue();
-            ObjectValue copy = new ObjectValue(original.getClassSymbol());
+        return copyValueWithSlicing(value, value.getType());
+    }
 
-            for (Map.Entry<String, Value> field : original.getFields().entrySet()) {
-                copy.setField(field.getKey(), copyValue(field.getValue()));
+    /**
+     * Copy a value, potentially slicing to a target type.
+     * For class types, if targetType is a base class of the value's type,
+     * the object is sliced to contain only the base class fields and use
+     * the base class's ClassSymbol (for correct virtual dispatch).
+     */
+    private Value copyValueWithSlicing(Value value, Type targetType) {
+        if (value.getType().getBaseType() == Type.BaseType.CLASS) {
+            ObjectValue original = value.getObjectValue();
+            ClassSymbol targetClass;
+
+            // Determine the target class (for slicing)
+            if (targetType.getBaseType() == Type.BaseType.CLASS) {
+                targetClass = classes.get(targetType.getClassName());
+            } else {
+                targetClass = original.getClassSymbol();
             }
 
-            return new Value(value.getType(), copy);
+            if (targetClass == null) {
+                targetClass = original.getClassSymbol();
+            }
+
+            // Create a new object with the TARGET class (this enables correct slicing)
+            ObjectValue copy = new ObjectValue(targetClass);
+
+            // Only copy fields that belong to the target class (and its ancestors)
+            copyFieldsForClass(copy, original, targetClass);
+
+            return new Value(targetType, copy);
         } else {
             // primitive types - create new value with same data
             return new Value(value.getType(), value.getData());
+        }
+    }
+
+    /**
+     * Copy fields from original to copy, but only fields that belong to the given class
+     * (including inherited fields from base classes).
+     */
+    private void copyFieldsForClass(ObjectValue copy, ObjectValue original, ClassSymbol classSymbol) {
+        // First copy base class fields
+        if (classSymbol.getBaseClass() != null) {
+            copyFieldsForClass(copy, original, classSymbol.getBaseClass());
+        }
+
+        // Then copy this class's own fields
+        for (String fieldName : classSymbol.getFields().keySet()) {
+            Value fieldValue = original.getField(fieldName);
+            if (fieldValue != null) {
+                copy.setField(fieldName, copyValue(fieldValue));
+            }
         }
     }
 
@@ -745,7 +815,34 @@ public class Interpreter implements ASTVisitor<Value> {
 
         // initialize this class's fields
         for (VarSymbol field : classSymbol.getFields().values()) {
-            Value fieldValue = Value.defaultValue(field.getType());
+            Value fieldValue;
+            if (field.getType().getBaseType() == Type.BaseType.CLASS) {
+                // For class-typed fields, create a new object and call its default constructor
+                ClassSymbol fieldClassSymbol = classes.get(field.getType().getClassName());
+                if (fieldClassSymbol != null) {
+                    ObjectValue fieldObj = new ObjectValue(fieldClassSymbol);
+                    initializeObjectFields(fieldObj, fieldClassSymbol);
+
+                    // call base constructors if any
+                    if (fieldClassSymbol.getBaseClass() != null) {
+                        callBaseConstructor(fieldObj, fieldClassSymbol.getBaseClass());
+                    }
+
+                    // call default constructor if exists
+                    for (ConstructorSymbol constructor : fieldClassSymbol.getConstructors()) {
+                        if (constructor.getParameters().isEmpty()) {
+                            executeConstructor(constructor.getDeclaration(), fieldObj, new ArrayList<>());
+                            break;
+                        }
+                    }
+
+                    fieldValue = new Value(field.getType(), fieldObj);
+                } else {
+                    fieldValue = Value.defaultValue(field.getType());
+                }
+            } else {
+                fieldValue = Value.defaultValue(field.getType());
+            }
             obj.setField(field.getName(), fieldValue);
         }
     }
@@ -757,7 +854,7 @@ public class Interpreter implements ASTVisitor<Value> {
         }
 
         // call parameterless constructor of this base class
-        for (ConstructorSymbol constructor : baseClass.getConstructors().values()) {
+        for (ConstructorSymbol constructor : baseClass.getConstructors()) {
             if (constructor.getParameters().isEmpty()) {
                 executeConstructor(constructor.getDeclaration(), obj, new ArrayList<>());
                 return;
@@ -767,7 +864,7 @@ public class Interpreter implements ASTVisitor<Value> {
     }
 
     private ConstructorSymbol findMatchingConstructor(ClassSymbol classSymbol, List<Expression> arguments) {
-        for (ConstructorSymbol constructor : classSymbol.getConstructors().values()) {
+        for (ConstructorSymbol constructor : classSymbol.getConstructors()) {
             if (constructor.getParameters().size() == arguments.size()) {
                 // check if types match
                 boolean match = true;
@@ -789,13 +886,57 @@ public class Interpreter implements ASTVisitor<Value> {
 
         // if no constructor found and no arguments, use default constructor (or none)
         if (arguments.isEmpty()) {
-            for (ConstructorSymbol constructor : classSymbol.getConstructors().values()) {
+            for (ConstructorSymbol constructor : classSymbol.getConstructors()) {
                 if (constructor.getParameters().isEmpty()) {
                     return constructor;
                 }
             }
         }
 
+        return null;
+    }
+
+    /**
+     * Check if a method is virtual, looking up the inheritance chain.
+     * A method is virtual if it or any of its ancestors declared it as virtual.
+     */
+    private boolean isMethodVirtual(ClassSymbol classSymbol, String methodName) {
+        ClassSymbol current = classSymbol;
+        while (current != null) {
+            List<MethodSymbol> overloads = current.getMethods().get(methodName);
+            if (overloads != null) {
+                for (MethodSymbol method : overloads) {
+                    if (method.isVirtual()) {
+                        return true;
+                    }
+                }
+            }
+            current = current.getBaseClass();
+        }
+        return false;
+    }
+
+    /**
+     * Find a method with matching signature in the given class (for dynamic dispatch).
+     */
+    private MethodSymbol findMatchingMethod(ClassSymbol classSymbol, String methodName, MethodSymbol original) {
+        List<MethodSymbol> overloads = classSymbol.lookupMethodOverloads(methodName);
+        for (MethodSymbol method : overloads) {
+            if (method.getParameters().size() == original.getParameters().size()) {
+                boolean match = true;
+                for (int i = 0; i < method.getParameters().size(); i++) {
+                    Type t1 = method.getParameters().get(i).getType();
+                    Type t2 = original.getParameters().get(i).getType();
+                    if (!t1.equals(t2)) {
+                        match = false;
+                        break;
+                    }
+                }
+                if (match) {
+                    return method;
+                }
+            }
+        }
         return null;
     }
 

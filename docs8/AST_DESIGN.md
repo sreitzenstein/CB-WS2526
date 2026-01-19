@@ -33,6 +33,31 @@ ASTNode (abstrakte Basisklasse)
 └── Type (Typen)
 ```
 
+### Positionsinformationen
+
+Jeder AST-Knoten speichert seine **Position im Quellcode** für Fehlermeldungen:
+
+```java
+public abstract class ASTNode {
+    private int line;    // Zeilennummer (1-basiert)
+    private int column;  // Spaltennummer (0-basiert)
+
+    public void setPosition(int line, int column);
+    public int getLine();
+    public int getColumn();
+}
+```
+
+**Warum ist das wichtig?**
+- Fehlermeldungen können die genaue Position angeben: `"variable 'x' not found (line 42)"`
+- Der ASTBuilder setzt die Position beim Erstellen jedes Knotens aus dem ANTLR-Kontext:
+  ```java
+  ReturnStmt stmt = new ReturnStmt(value);
+  stmt.setPosition(ctx.getStart().getLine(), ctx.getStart().getCharPositionInLine());
+  ```
+
+**Hinweis:** Nicht alle Knoten haben garantiert eine Position. Wenn `line == -1`, wurde keine Position gesetzt (z.B. bei synthetisch erzeugten Knoten).
+
 ## 1. Declarations (Deklarationen)
 
 **Was gehört dazu:** Alles, was etwas "definiert" (Klassen, Funktionen, Variablen)
@@ -383,3 +408,72 @@ Program([
 - Typen, Namen, Werte
 - Struktur (welches Statement in welchem Block?)
 - Operatoren (als Enum, nicht als String)
+- **Positionsinformationen** (Zeile, Spalte) für Fehlermeldungen
+
+## 5. ASTBuilder: Parse-Tree → AST
+
+Der `ASTBuilder` konvertiert den ANTLR Parse-Tree in unseren AST. Er erweitert `CPPBaseVisitor<ASTNode>` und überschreibt die `visit*`-Methoden.
+
+### Wichtige Aufgaben:
+
+1. **Knoten erstellen:** Für jede Grammatikregel einen passenden AST-Knoten erzeugen
+2. **Position setzen:** Zeilennummer aus dem ANTLR-Kontext übernehmen
+3. **Kinder besuchen:** Rekursiv in Unterknoten absteigen
+
+### Beispiel:
+
+```java
+@Override
+public ASTNode visitReturnStmt(CPPParser.ReturnStmtContext ctx) {
+    Expression value = ctx.expression() != null
+            ? (Expression) visit(ctx.expression())
+            : null;
+    ReturnStmt stmt = new ReturnStmt(value);
+    stmt.setPosition(ctx.getStart().getLine(), ctx.getStart().getCharPositionInLine());
+    return stmt;
+}
+```
+
+### Knoten mit Positionsinformationen:
+
+Folgende Knoten setzen ihre Position im ASTBuilder:
+- **Declarations:** `ClassDecl`, `FunctionDecl`, `MethodDecl`, `ConstructorDecl`, `VarDecl` (als Feld)
+- **Statements:** `ReturnStmt`
+- **Expressions:** `AssignExpr`, `ConstructorCallExpr`, `VarExpr`, `MemberAccessExpr`
+
+## 6. Visitor-Pattern
+
+Der AST verwendet das **Visitor-Pattern** für Traversierung. Jeder Knoten hat eine `accept`-Methode:
+
+```java
+public abstract <T> T accept(ASTVisitor<T> visitor);
+```
+
+### Verwendung:
+
+```java
+// Im Knoten (z.B. ReturnStmt):
+public <T> T accept(ASTVisitor<T> visitor) {
+    return visitor.visitReturnStmt(this);
+}
+
+// Im Visitor (z.B. SemanticAnalyzer):
+@Override
+public Type visitReturnStmt(ReturnStmt node) {
+    // Analysiere das Return-Statement
+    if (node.getValue() != null) {
+        Type returnType = node.getValue().accept(this);
+        // ...
+    }
+}
+```
+
+### Vorteile:
+- **Separation of Concerns:** AST-Struktur ist getrennt von den Operationen
+- **Erweiterbar:** Neue Operationen ohne Änderung der AST-Klassen
+- **Typsicher:** Compiler prüft, dass alle Knoten behandelt werden
+
+### Unsere Visitors:
+1. `SymbolTableBuilder` - Baut die Symboltabelle auf
+2. `SemanticAnalyzer` - Prüft Typen und semantische Regeln
+3. `Interpreter` - Führt das Programm aus

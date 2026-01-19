@@ -41,6 +41,15 @@ public class Scope {
             FunctionSymbol funcSymbol = (FunctionSymbol) symbol;
             List<FunctionSymbol> overloads = overloadedFunctions.computeIfAbsent(
                 symbol.getName(), k -> new ArrayList<>());
+
+            // Check for duplicate signature
+            for (FunctionSymbol existing : overloads) {
+                if (hasSameSignature(existing, funcSymbol)) {
+                    throw new RuntimeException("function '" + symbol.getName() +
+                        "' with same signature already defined in scope '" + name + "'");
+                }
+            }
+
             overloads.add(funcSymbol);
             // Also store in symbols map (first definition or overwrite for lookup)
             symbols.put(symbol.getName(), symbol);
@@ -51,6 +60,36 @@ public class Scope {
             throw new RuntimeException("symbol '" + symbol.getName() + "' already defined in scope '" + name + "'");
         }
         symbols.put(symbol.getName(), symbol);
+    }
+
+    /**
+     * Check if two function symbols have the same signature
+     * (same parameter count, types, and reference status)
+     */
+    private boolean hasSameSignature(FunctionSymbol a, FunctionSymbol b) {
+        var paramsA = a.getParameters();
+        var paramsB = b.getParameters();
+
+        if (paramsA.size() != paramsB.size()) {
+            return false;
+        }
+
+        for (int i = 0; i < paramsA.size(); i++) {
+            var paramA = paramsA.get(i);
+            var paramB = paramsB.get(i);
+
+            // Check type match
+            if (!paramA.getType().equals(paramB.getType())) {
+                return false;
+            }
+
+            // Check reference status match
+            if (paramA.isReference() != paramB.isReference()) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /**
@@ -107,6 +146,15 @@ public class Scope {
      */
     public boolean isDefined(String name) {
         return symbols.containsKey(name);
+    }
+
+    /**
+     * remove a symbol from this scope
+     * @param name the name of the symbol to remove
+     */
+    public void remove(String name) {
+        symbols.remove(name);
+        overloadedFunctions.remove(name);
     }
 
     @Override

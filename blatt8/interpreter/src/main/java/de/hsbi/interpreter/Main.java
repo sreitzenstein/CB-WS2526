@@ -81,6 +81,9 @@ public class Main {
             // start REPL
             startREPL();
 
+        } catch (RuntimeError e) {
+            System.err.println("Runtime error: " + e.getMessage());
+            System.exit(1);
         } catch (Exception e) {
             System.err.println("Error: " + e.getMessage());
             e.printStackTrace();
@@ -325,10 +328,17 @@ public class Main {
             parser.removeErrorListeners();
             lexer.removeErrorListeners();
 
+            parser.addErrorListener(new BaseErrorListener() {
+                @Override
+                public void syntaxError(Recognizer<?, ?> recognizer, Object offendingSymbol,
+                                        int line, int charPositionInLine, String msg, RecognitionException e) {
+                    System.err.println("Syntax error: " + msg);
+                }
+            });
+
             CPPParser.ProgramContext programContext = parser.program();
 
             if (parser.getNumberOfSyntaxErrors() > 0) {
-                System.err.println("Syntax error in input");
                 return;
             }
 
@@ -341,11 +351,37 @@ public class Main {
                 return;
             }
 
-            if (isDefinition) {
-                // register functions from the definition
-                for (FunctionDecl func : program.getFunctions()) {
-                    interpreter.execute(program);
+            // build symbol table incrementally (extends existing symbolTable)
+            SymbolTableBuilder symbolTableBuilder = new SymbolTableBuilder(symbolTable);
+            symbolTableBuilder.build(program);
+
+            // immediately remove dummy function so it can be redefined next time
+            // (must happen before any return, so errors don't leave it registered)
+            if (!isDefinition) {
+                symbolTable.getGlobalScope().remove("__repl_dummy__");
+            }
+
+            if (symbolTableBuilder.hasErrors()) {
+                for (String error : symbolTableBuilder.getErrors()) {
+                    System.err.println("Error: " + error);
                 }
+                return;
+            }
+
+            // semantic analysis
+            SemanticAnalyzer semanticAnalyzer = new SemanticAnalyzer(symbolTable);
+            boolean success = semanticAnalyzer.analyze(program);
+
+            if (!success) {
+                for (String error : semanticAnalyzer.getErrors()) {
+                    System.err.println("Error: " + error);
+                }
+                return;
+            }
+
+            if (isDefinition) {
+                // register functions/classes from the definition
+                interpreter.execute(program);
                 System.out.println("Defined.");
             } else {
                 // execute statements from dummy function

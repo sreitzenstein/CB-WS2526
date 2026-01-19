@@ -24,6 +24,17 @@ public class SymbolTableBuilder implements ASTVisitor<Void> {
         this.errors = new ArrayList<>();
     }
 
+    /**
+     * Constructor for incremental building (e.g., REPL mode)
+     * @param existingSymbolTable the existing symbol table to extend
+     */
+    public SymbolTableBuilder(SymbolTable existingSymbolTable) {
+        this.symbolTable = existingSymbolTable;
+        this.currentClass = null;
+        this.firstPass = true;
+        this.errors = new ArrayList<>();
+    }
+
     public SymbolTable getSymbolTable() {
         return symbolTable;
     }
@@ -109,7 +120,22 @@ public class SymbolTableBuilder implements ASTVisitor<Void> {
                     method,
                     currentClass
                 );
-                currentClass.addMethod(methodSymbol);
+                try {
+                    currentClass.addMethod(methodSymbol);
+                } catch (RuntimeException e) {
+                    // Build signature string for error message
+                    StringBuilder sig = new StringBuilder(method.getName()).append("(");
+                    for (int i = 0; i < method.getParameters().size(); i++) {
+                        if (i > 0) sig.append(", ");
+                        Parameter p = method.getParameters().get(i);
+                        sig.append(p.getType().toString());
+                        if (p.isReference()) sig.append("&");
+                    }
+                    sig.append(")");
+
+                    String lineInfo = method.getLine() > 0 ? " (line " + method.getLine() + ")" : "";
+                    error("method '" + currentClass.getName() + "::" + sig + "' is already defined" + lineInfo);
+                }
             }
 
             // process constructors
@@ -139,7 +165,22 @@ public class SymbolTableBuilder implements ASTVisitor<Void> {
                 node.getParameters(),
                 node
             );
-            symbolTable.getGlobalScope().define(functionSymbol);
+            try {
+                symbolTable.getGlobalScope().define(functionSymbol);
+            } catch (RuntimeException e) {
+                // Build signature string for error message
+                StringBuilder sig = new StringBuilder(node.getName()).append("(");
+                for (int i = 0; i < node.getParameters().size(); i++) {
+                    if (i > 0) sig.append(", ");
+                    Parameter p = node.getParameters().get(i);
+                    sig.append(p.getType().toString());
+                    if (p.isReference()) sig.append("&");
+                }
+                sig.append(")");
+
+                String lineInfo = node.getLine() > 0 ? " (line " + node.getLine() + ")" : "";
+                error("function '" + sig + "' is already defined" + lineInfo);
+            }
         } else {
             // second pass: process function body
             symbolTable.enterScope("function:" + node.getName());
@@ -178,7 +219,8 @@ public class SymbolTableBuilder implements ASTVisitor<Void> {
         if (!firstPass) {
             // Check if variable already exists in current scope
             if (symbolTable.getCurrentScope().isDefined(node.getName())) {
-                error("variable '" + node.getName() + "' is already defined in this scope");
+                String lineInfo = node.getLine() > 0 ? " (line " + node.getLine() + ")" : "";
+                error("variable '" + node.getName() + "' is already defined in this scope" + lineInfo);
             } else {
                 VarSymbol varSymbol = new VarSymbol(node.getName(), node.getType(), node.isReference());
                 symbolTable.define(varSymbol);

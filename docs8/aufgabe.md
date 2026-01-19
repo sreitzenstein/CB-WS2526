@@ -289,7 +289,13 @@ Entwickeln Sie weitere aussagekräftige Tests, die die Vorgaben ergänzen.
 
 ## Projektvorstellung: Walk-Through statt Präsentation
 
-Erstelle hierzu readme dateien:
+Stellen Sie Ihr Projekt am Semesterende vor (Termine siehe Fahrplan und
+Ankündigung).
+
+Jedes Team hat dafür **15 Minuten** Zeit.
+
+Gehen Sie dabei am Code durch Ihr Projekt und diskutieren Sie relevante
+Teile, mindestens aber:
 
 - Spezifikation: kurze Sprachbeschreibung mit allen getroffenen
   Designentscheidungen
@@ -297,7 +303,22 @@ Erstelle hierzu readme dateien:
   semantische Checks, Interpreter mit dynamischem Dispatch, REPL
 - Kurze Anleitung: Wie bauen/ausführen, wie REPL nutzen.
 
-
-erstelle mir hier bitte eine anleitung:
 Demonstrieren Sie die Funktionsfähigkeit mit Ihren C++-Codebeispielen.
 
+**Sie sollen keine Folien erstellen. Die Präsentation soll live in der
+IDE erfolgen.**
+
+## Abgabeformat
+
+Geben Sie wie bei den anderen Blättern auch pro Person ein individuelles
+Post Mortem im ILIAS ab. Geben Sie dabei im Post Mortem unbedingt die
+URL zu Ihrem Team-Repo an. Denken Sie daran, dass dieses Repo öffentlich
+einsehbar sein muss.
+
+------------------------------------------------------------------------
+
+<img src="https://licensebuttons.net/l/by-sa/4.0/88x31.png" width="10%">
+
+Unless otherwise noted, this work is licensed under CC BY-SA 4.0.
+
+<blockquote><p><sup><sub><strong>Last modified:</strong> 08cc399 (homework: you need to read (B08), 2025-12-07)<br></sub></sup></p></blockquote>

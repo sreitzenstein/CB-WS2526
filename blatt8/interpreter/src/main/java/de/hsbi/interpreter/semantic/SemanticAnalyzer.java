@@ -38,6 +38,14 @@ public class SemanticAnalyzer implements ASTVisitor<Type> {
         errors.add(message);
     }
 
+    private void error(String message, ASTNode node) {
+        if (node != null && node.getLine() > 0) {
+            errors.add(message + " (line " + node.getLine() + ")");
+        } else {
+            errors.add(message);
+        }
+    }
+
     /**
      * analyze the program
      * @param program the AST root
@@ -69,14 +77,14 @@ public class SemanticAnalyzer implements ASTVisitor<Type> {
 
         // check for inheritance cycles
         if (hasInheritanceCycle(currentClass)) {
-            error("class '" + node.getName() + "' has cyclic inheritance");
+            error("class '" + node.getName() + "' has cyclic inheritance", node);
         }
 
         // analyze fields
         for (VarDecl field : node.getFields()) {
             // check that field is not a reference
             if (field.isReference()) {
-                error("class '" + node.getName() + "': field '" + field.getName() + "' cannot be a reference");
+                error("class '" + node.getName() + "': field '" + field.getName() + "' cannot be a reference", field);
             }
             field.accept(this);
         }
@@ -127,11 +135,17 @@ public class SemanticAnalyzer implements ASTVisitor<Type> {
 
         symbolTable.enterScope("method:" + node.getName());
 
-        // define parameters in method scope
+        // First, define parameters in method scope (they take precedence over fields)
         for (Parameter param : node.getParameters()) {
             VarSymbol paramSymbol = new VarSymbol(param.getName(), param.getType(), param.isReference());
             symbolTable.define(paramSymbol);
             param.accept(this);
+        }
+
+        // Then define class fields in method scope (including inherited fields)
+        // but only if not already shadowed by a parameter
+        if (currentClass != null) {
+            defineClassFieldsInScope(currentClass);
         }
 
         // analyze body
@@ -150,11 +164,17 @@ public class SemanticAnalyzer implements ASTVisitor<Type> {
 
         symbolTable.enterScope("constructor:" + node.getName());
 
-        // define parameters in constructor scope
+        // First, define parameters in constructor scope (they take precedence over fields)
         for (Parameter param : node.getParameters()) {
             VarSymbol paramSymbol = new VarSymbol(param.getName(), param.getType(), param.isReference());
             symbolTable.define(paramSymbol);
             param.accept(this);
+        }
+
+        // Then define class fields in constructor scope (including inherited fields)
+        // but only if not already shadowed by a parameter
+        if (currentClass != null) {
+            defineClassFieldsInScope(currentClass);
         }
 
         // analyze body
@@ -171,7 +191,7 @@ public class SemanticAnalyzer implements ASTVisitor<Type> {
     public Type visitVarDecl(VarDecl node) {
         // check that type exists
         if (!isValidType(node.getType())) {
-            error("variable '" + node.getName() + "': unknown type '" + node.getType() + "'");
+            error("variable '" + node.getName() + "': unknown type '" + node.getType() + "'", node);
         }
 
         // check initializer if present
@@ -180,23 +200,26 @@ public class SemanticAnalyzer implements ASTVisitor<Type> {
 
             // check that initializer type matches variable type
             if (!typesMatch(node.getType(), initType)) {
-                error("variable '" + node.getName() + "': initializer type '" + initType + "' does not match variable type '" + node.getType() + "'");
+                error("variable '" + node.getName() + "': initializer type '" + initType + "' does not match variable type '" + node.getType() + "'", node);
             }
 
             // if variable is a reference, initializer must be an lvalue
             if (node.isReference() && !isLValue(node.getInitializer())) {
-                error("variable '" + node.getName() + "': reference must be initialized with an lvalue");
+                error("variable '" + node.getName() + "': reference must be initialized with an lvalue", node);
             }
         } else {
             // references must be initialized
             if (node.isReference()) {
-                error("variable '" + node.getName() + "': reference must be initialized");
+                error("variable '" + node.getName() + "': reference must be initialized", node);
             }
         }
 
-        // define variable in current scope
-        VarSymbol varSymbol = new VarSymbol(node.getName(), node.getType(), node.isReference());
-        symbolTable.define(varSymbol);
+        // Only define variable in symbol table if we're NOT inside a class definition
+        // (class fields are already stored in ClassSymbol, not in the global scope)
+        if (currentClass == null) {
+            VarSymbol varSymbol = new VarSymbol(node.getName(), node.getType(), node.isReference());
+            symbolTable.define(varSymbol);
+        }
 
         return null;
     }
@@ -205,7 +228,7 @@ public class SemanticAnalyzer implements ASTVisitor<Type> {
     public Type visitParameter(Parameter node) {
         // check that type exists
         if (!isValidType(node.getType())) {
-            error("parameter '" + node.getName() + "': unknown type '" + node.getType() + "'");
+            error("parameter '" + node.getName() + "': unknown type '" + node.getType() + "'", node);
         }
         return null;
     }
@@ -228,7 +251,7 @@ public class SemanticAnalyzer implements ASTVisitor<Type> {
 
         // condition can be bool, int, char, or string (implicit conversion to bool)
         if (condType != null && !canConvertToBool(condType)) {
-            error("if condition must be bool, int, char, or string");
+            error("if condition must be bool, int, char, or string", node);
         }
 
         node.getThenStmt().accept(this);
@@ -246,7 +269,7 @@ public class SemanticAnalyzer implements ASTVisitor<Type> {
 
         // condition can be bool, int, char, or string (implicit conversion to bool)
         if (condType != null && !canConvertToBool(condType)) {
-            error("while condition must be bool, int, char, or string");
+            error("while condition must be bool, int, char, or string", node);
         }
 
         node.getBody().accept(this);
@@ -256,23 +279,23 @@ public class SemanticAnalyzer implements ASTVisitor<Type> {
     @Override
     public Type visitReturnStmt(ReturnStmt node) {
         if (currentFunctionReturnType == null) {
-            error("return statement outside of function");
+            error("return statement outside of function", node);
             return null;
         }
 
         if (node.getValue() == null) {
             // return without value - function must be void
             if (!currentFunctionReturnType.isVoid()) {
-                error("non-void function must return a value");
+                error("non-void function must return a value", node);
             }
         } else {
             // return with value
             Type returnType = node.getValue().accept(this);
 
             if (currentFunctionReturnType.isVoid()) {
-                error("void function cannot return a value");
+                error("void function cannot return a value", node);
             } else if (!typesMatch(currentFunctionReturnType, returnType)) {
-                error("return type '" + returnType + "' does not match function return type '" + currentFunctionReturnType + "'");
+                error("return type '" + returnType + "' does not match function return type '" + currentFunctionReturnType + "'", node);
             }
         }
 
@@ -305,7 +328,7 @@ public class SemanticAnalyzer implements ASTVisitor<Type> {
             case MOD:
                 // arithmetic operators: both operands must be int
                 if (!leftType.equals(new Type(Type.BaseType.INT)) || !rightType.equals(new Type(Type.BaseType.INT))) {
-                    error("arithmetic operator requires int operands");
+                    error("arithmetic operator requires int operands", node);
                     return null;
                 }
                 node.setType(new Type(Type.BaseType.INT));
@@ -323,7 +346,7 @@ public class SemanticAnalyzer implements ASTVisitor<Type> {
                     node.setType(new Type(Type.BaseType.BOOL));
                     return new Type(Type.BaseType.BOOL);
                 } else {
-                    error("relational operator requires int or char operands");
+                    error("relational operator requires int or char operands", node);
                     return null;
                 }
 
@@ -331,7 +354,7 @@ public class SemanticAnalyzer implements ASTVisitor<Type> {
             case NEQ:
                 // equality operators: same type
                 if (!typesMatch(leftType, rightType)) {
-                    error("equality operator requires operands of same type");
+                    error("equality operator requires operands of same type", node);
                     return null;
                 }
                 node.setType(new Type(Type.BaseType.BOOL));
@@ -341,14 +364,14 @@ public class SemanticAnalyzer implements ASTVisitor<Type> {
             case OR:
                 // logical operators: both operands must be bool
                 if (!leftType.equals(new Type(Type.BaseType.BOOL)) || !rightType.equals(new Type(Type.BaseType.BOOL))) {
-                    error("logical operator requires bool operands");
+                    error("logical operator requires bool operands", node);
                     return null;
                 }
                 node.setType(new Type(Type.BaseType.BOOL));
                 return new Type(Type.BaseType.BOOL);
 
             default:
-                error("unknown binary operator: " + op);
+                error("unknown binary operator: " + op, node);
                 return null;
         }
     }
@@ -368,7 +391,7 @@ public class SemanticAnalyzer implements ASTVisitor<Type> {
             case MINUS:
                 // unary plus/minus: operand must be int
                 if (!operandType.equals(new Type(Type.BaseType.INT))) {
-                    error("unary +/- requires int operand");
+                    error("unary +/- requires int operand", node);
                     return null;
                 }
                 node.setType(new Type(Type.BaseType.INT));
@@ -377,14 +400,14 @@ public class SemanticAnalyzer implements ASTVisitor<Type> {
             case NOT:
                 // logical not: operand must be bool
                 if (!operandType.equals(new Type(Type.BaseType.BOOL))) {
-                    error("logical ! requires bool operand");
+                    error("logical ! requires bool operand", node);
                     return null;
                 }
                 node.setType(new Type(Type.BaseType.BOOL));
                 return new Type(Type.BaseType.BOOL);
 
             default:
-                error("unknown unary operator: " + op);
+                error("unknown unary operator: " + op, node);
                 return null;
         }
     }
@@ -393,7 +416,7 @@ public class SemanticAnalyzer implements ASTVisitor<Type> {
     public Type visitAssignExpr(AssignExpr node) {
         // target must be an lvalue
         if (!isLValue(node.getTarget())) {
-            error("left side of assignment must be an lvalue");
+            error("left side of assignment must be an lvalue", node);
         }
 
         Type targetType = node.getTarget().accept(this);
@@ -417,7 +440,7 @@ public class SemanticAnalyzer implements ASTVisitor<Type> {
 
         // types must match
         if (!typesMatch(targetType, valueType)) {
-            error("assignment: type mismatch ('" + targetType + "' vs '" + valueType + "')");
+            error("assignment: type mismatch ('" + targetType + "' vs '" + valueType + "')", node);
             return null;
         }
 
@@ -430,12 +453,12 @@ public class SemanticAnalyzer implements ASTVisitor<Type> {
         Symbol symbol = symbolTable.resolve(node.getName());
 
         if (symbol == null) {
-            error("variable '" + node.getName() + "' not found");
+            error("variable '" + node.getName() + "' not found", node);
             return null;
         }
 
         if (symbol.getKind() != Symbol.SymbolKind.VARIABLE) {
-            error("'" + node.getName() + "' is not a variable");
+            error("'" + node.getName() + "' is not a variable", node);
             return null;
         }
 
@@ -449,12 +472,12 @@ public class SemanticAnalyzer implements ASTVisitor<Type> {
         Symbol symbol = symbolTable.resolve(node.getFunctionName());
 
         if (symbol == null) {
-            error("function '" + node.getFunctionName() + "' not found");
+            error("function '" + node.getFunctionName() + "' not found", node);
             return null;
         }
 
         if (symbol.getKind() != Symbol.SymbolKind.FUNCTION) {
-            error("'" + node.getFunctionName() + "' is not a function");
+            error("'" + node.getFunctionName() + "' is not a function", node);
             return null;
         }
 
@@ -462,7 +485,7 @@ public class SemanticAnalyzer implements ASTVisitor<Type> {
 
         // check argument count
         if (node.getArguments().size() != function.getParameters().size()) {
-            error("function '" + node.getFunctionName() + "': expected " + function.getParameters().size() + " arguments, got " + node.getArguments().size());
+            error("function '" + node.getFunctionName() + "': expected " + function.getParameters().size() + " arguments, got " + node.getArguments().size(), node);
             return null;
         }
 
@@ -477,12 +500,12 @@ public class SemanticAnalyzer implements ASTVisitor<Type> {
             }
 
             if (!typesMatch(param.getType(), argType)) {
-                error("function '" + node.getFunctionName() + "': argument " + (i + 1) + " type mismatch (expected '" + param.getType() + "', got '" + argType + "')");
+                error("function '" + node.getFunctionName() + "': argument " + (i + 1) + " type mismatch (expected '" + param.getType() + "', got '" + argType + "')", node);
             }
 
             // if parameter is a reference, argument must be an lvalue
             if (param.isReference() && !isLValue(arg)) {
-                error("function '" + node.getFunctionName() + "': argument " + (i + 1) + " must be an lvalue (parameter is a reference)");
+                error("function '" + node.getFunctionName() + "': argument " + (i + 1) + " must be an lvalue (parameter is a reference)", node);
             }
         }
 
@@ -499,31 +522,32 @@ public class SemanticAnalyzer implements ASTVisitor<Type> {
         }
 
         if (objectType.getBaseType() != Type.BaseType.CLASS) {
-            error("member access: object must be of class type");
+            error("member access: object must be of class type", node);
             return null;
         }
 
         ClassSymbol classSymbol = symbolTable.getClass(objectType.getClassName());
         if (classSymbol == null) {
-            error("member access: class '" + objectType.getClassName() + "' not found");
+            error("member access: class '" + objectType.getClassName() + "' not found", node);
             return null;
         }
 
         if (node.isMethodCall()) {
-            // method call
-            MethodSymbol method = classSymbol.lookupMethod(node.getMemberName());
+            // method call - find best matching overload
+            List<MethodSymbol> overloads = classSymbol.lookupMethodOverloads(node.getMemberName());
+            if (overloads.isEmpty()) {
+                error("class '" + objectType.getClassName() + "' has no method '" + node.getMemberName() + "'", node);
+                return null;
+            }
+
+            // Find matching method overload
+            MethodSymbol method = findBestMethodOverload(overloads, node.getArguments());
             if (method == null) {
-                error("class '" + objectType.getClassName() + "' has no method '" + node.getMemberName() + "'");
+                error("no matching method for call to '" + node.getMemberName() + "'", node);
                 return null;
             }
 
-            // check argument count
-            if (node.getArguments().size() != method.getParameters().size()) {
-                error("method '" + node.getMemberName() + "': expected " + method.getParameters().size() + " arguments, got " + node.getArguments().size());
-                return null;
-            }
-
-            // check argument types
+            // check argument types (for error messages)
             for (int i = 0; i < node.getArguments().size(); i++) {
                 Expression arg = node.getArguments().get(i);
                 Parameter param = method.getParameters().get(i);
@@ -534,22 +558,24 @@ public class SemanticAnalyzer implements ASTVisitor<Type> {
                 }
 
                 if (!typesMatch(param.getType(), argType)) {
-                    error("method '" + node.getMemberName() + "': argument " + (i + 1) + " type mismatch (expected '" + param.getType() + "', got '" + argType + "')");
+                    error("method '" + node.getMemberName() + "': argument " + (i + 1) + " type mismatch (expected '" + param.getType() + "', got '" + argType + "')", node);
                 }
 
                 // if parameter is a reference, argument must be an lvalue
                 if (param.isReference() && !isLValue(arg)) {
-                    error("method '" + node.getMemberName() + "': argument " + (i + 1) + " must be an lvalue (parameter is a reference)");
+                    error("method '" + node.getMemberName() + "': argument " + (i + 1) + " must be an lvalue (parameter is a reference)", node);
                 }
             }
 
+            // Store the resolved method for the interpreter
+            node.setResolvedMethod(method);
             node.setType(method.getType());
             return method.getType();
         } else {
             // field access
             VarSymbol field = classSymbol.lookupField(node.getMemberName());
             if (field == null) {
-                error("class '" + objectType.getClassName() + "' has no field '" + node.getMemberName() + "'");
+                error("class '" + objectType.getClassName() + "' has no field '" + node.getMemberName() + "'", node);
                 return null;
             }
 
@@ -573,7 +599,7 @@ public class SemanticAnalyzer implements ASTVisitor<Type> {
             FunctionSymbol function = findBestFunctionOverload(overloads, node.getArguments());
 
             if (function == null) {
-                error("no matching function for call to '" + node.getClassName() + "'");
+                error("no matching function for call to '" + node.getClassName() + "'", node);
                 return null;
             }
 
@@ -588,12 +614,12 @@ public class SemanticAnalyzer implements ASTVisitor<Type> {
                 }
 
                 if (!typesMatch(param.getType(), argType)) {
-                    error("function '" + node.getClassName() + "': argument " + (i + 1) + " type mismatch (expected '" + param.getType() + "', got '" + argType + "')");
+                    error("function '" + node.getClassName() + "': argument " + (i + 1) + " type mismatch (expected '" + param.getType() + "', got '" + argType + "')", node);
                 }
 
                 // if parameter is a reference, argument must be an lvalue
                 if (param.isReference() && !isLValue(arg)) {
-                    error("function '" + node.getClassName() + "': argument " + (i + 1) + " must be an lvalue (parameter is a reference)");
+                    error("function '" + node.getClassName() + "': argument " + (i + 1) + " must be an lvalue (parameter is a reference)", node);
                 }
             }
 
@@ -607,7 +633,7 @@ public class SemanticAnalyzer implements ASTVisitor<Type> {
         ClassSymbol classSymbol = symbolTable.getClass(node.getClassName());
 
         if (classSymbol == null) {
-            error("class '" + node.getClassName() + "' not found");
+            error("class '" + node.getClassName() + "' not found", node);
             return null;
         }
 
@@ -615,7 +641,7 @@ public class SemanticAnalyzer implements ASTVisitor<Type> {
         ConstructorSymbol constructor = findConstructor(classSymbol, node.getArguments());
 
         if (constructor == null) {
-            error("class '" + node.getClassName() + "': no matching constructor found");
+            error("class '" + node.getClassName() + "': no matching constructor found", node);
             return null;
         }
 
@@ -642,12 +668,12 @@ public class SemanticAnalyzer implements ASTVisitor<Type> {
             }
 
             if (!typesMatch(param.getType(), argType)) {
-                error("constructor '" + node.getClassName() + "': argument " + (i + 1) + " type mismatch (expected '" + param.getType() + "', got '" + argType + "')");
+                error("constructor '" + node.getClassName() + "': argument " + (i + 1) + " type mismatch (expected '" + param.getType() + "', got '" + argType + "')", node);
             }
 
             // if parameter is a reference, argument must be an lvalue
             if (param.isReference() && !isLValue(arg)) {
-                error("constructor '" + node.getClassName() + "': argument " + (i + 1) + " must be an lvalue (parameter is a reference)");
+                error("constructor '" + node.getClassName() + "': argument " + (i + 1) + " must be an lvalue (parameter is a reference)", node);
             }
         }
 
@@ -673,7 +699,7 @@ public class SemanticAnalyzer implements ASTVisitor<Type> {
                 type = new Type(Type.BaseType.STRING);
                 break;
             default:
-                error("unknown literal type");
+                error("unknown literal type", node);
                 return null;
         }
         node.setType(type);
@@ -744,6 +770,25 @@ public class SemanticAnalyzer implements ASTVisitor<Type> {
         return false;
     }
 
+    /**
+     * Define all fields of a class (including inherited fields) in the current scope.
+     * This is used when analyzing methods and constructors.
+     */
+    private void defineClassFieldsInScope(ClassSymbol classSymbol) {
+        // First, add inherited fields (from base classes, in order from oldest ancestor)
+        if (classSymbol.getBaseClass() != null) {
+            defineClassFieldsInScope(classSymbol.getBaseClass());
+        }
+
+        // Then add own fields
+        for (VarSymbol field : classSymbol.getFields().values()) {
+            // Only define if not already defined (could be shadowed by subclass)
+            if (symbolTable.resolveLocal(field.getName()) == null) {
+                symbolTable.define(new VarSymbol(field.getName(), field.getType(), field.isReference()));
+            }
+        }
+    }
+
     private boolean isDerivedFrom(ClassSymbol derived, ClassSymbol base) {
         ClassSymbol current = derived.getBaseClass();
         while (current != null) {
@@ -767,7 +812,7 @@ public class SemanticAnalyzer implements ASTVisitor<Type> {
         }
 
         // find constructor with matching signature
-        for (ConstructorSymbol constructor : classSymbol.getConstructors().values()) {
+        for (ConstructorSymbol constructor : classSymbol.getConstructors()) {
             if (constructor.getParameters().size() == arguments.size()) {
                 boolean match = true;
                 for (int i = 0; i < arguments.size(); i++) {
@@ -787,7 +832,7 @@ public class SemanticAnalyzer implements ASTVisitor<Type> {
         // if no constructor found and no arguments, use default constructor
         if (arguments.isEmpty()) {
             // check if default constructor exists
-            for (ConstructorSymbol constructor : classSymbol.getConstructors().values()) {
+            for (ConstructorSymbol constructor : classSymbol.getConstructors()) {
                 if (constructor.getParameters().isEmpty()) {
                     return constructor;
                 }
@@ -818,23 +863,25 @@ public class SemanticAnalyzer implements ASTVisitor<Type> {
         }
 
         // check each method in this class
-        for (MethodSymbol method : classSymbol.getMethods().values()) {
-            MethodSymbol baseMethod = classSymbol.getBaseClass().lookupMethod(method.getName());
+        for (List<MethodSymbol> overloads : classSymbol.getMethods().values()) {
+            for (MethodSymbol method : overloads) {
+                MethodSymbol baseMethod = classSymbol.getBaseClass().lookupMethod(method.getName());
 
-            if (baseMethod != null) {
-                // method with same name exists in base class
-                // check if signature matches
-                if (parametersMatch(method.getParameters(), baseMethod.getParameters())) {
-                    // signatures match
-                    // In C++, a derived class can "hide" a non-virtual base method with a method
-                    // of the same signature. This is valid - it just means:
-                    // - If base method is virtual: dynamic dispatch applies
-                    // - If base method is not virtual: static dispatch (method hiding)
-                    // The derived class can also introduce 'virtual' on its own method
+                if (baseMethod != null) {
+                    // method with same name exists in base class
+                    // check if signature matches
+                    if (parametersMatch(method.getParameters(), baseMethod.getParameters())) {
+                        // signatures match
+                        // In C++, a derived class can "hide" a non-virtual base method with a method
+                        // of the same signature. This is valid - it just means:
+                        // - If base method is virtual: dynamic dispatch applies
+                        // - If base method is not virtual: static dispatch (method hiding)
+                        // The derived class can also introduce 'virtual' on its own method
 
-                    // check that return types match
-                    if (!typesMatch(method.getType(), baseMethod.getType())) {
-                        error("method '" + method.getName() + "' in class '" + classSymbol.getName() + "' has different return type than base method");
+                        // check that return types match
+                        if (!typesMatch(method.getType(), baseMethod.getType())) {
+                            error("method '" + method.getName() + "' in class '" + classSymbol.getName() + "' has different return type than base method", method.getDeclaration());
+                        }
                     }
                 }
             }
@@ -870,7 +917,7 @@ public class SemanticAnalyzer implements ASTVisitor<Type> {
 
         // all built-in functions take exactly 1 argument
         if (node.getArguments().size() != 1) {
-            error("built-in function '" + name + "' expects 1 argument, got " + node.getArguments().size());
+            error("built-in function '" + name + "' expects 1 argument, got " + node.getArguments().size(), node);
             return null;
         }
 
@@ -894,7 +941,7 @@ public class SemanticAnalyzer implements ASTVisitor<Type> {
         }
 
         if (!typesMatch(expectedType, argType)) {
-            error("built-in function '" + name + "': argument type mismatch (expected '" + expectedType + "', got '" + argType + "')");
+            error("built-in function '" + name + "': argument type mismatch (expected '" + expectedType + "', got '" + argType + "')", node);
             return null;
         }
 
@@ -1003,6 +1050,62 @@ public class SemanticAnalyzer implements ASTVisitor<Type> {
         }
 
         // If no ambiguous args, just return the first viable (should not happen in practice)
+        return viableOverloads.get(0);
+    }
+
+    /**
+     * Find the best matching method overload for the given arguments.
+     * Similar to findBestFunctionOverload but for methods.
+     */
+    private MethodSymbol findBestMethodOverload(List<MethodSymbol> overloads, List<Expression> arguments) {
+        // First evaluate argument types
+        List<Type> argTypes = new ArrayList<>();
+        List<Boolean> argIsLValue = new ArrayList<>();
+        for (Expression arg : arguments) {
+            argTypes.add(arg.accept(this));
+            argIsLValue.add(isLValue(arg));
+        }
+
+        // Collect all viable overloads
+        List<MethodSymbol> viableOverloads = new ArrayList<>();
+
+        for (MethodSymbol method : overloads) {
+            if (method.getParameters().size() != arguments.size()) {
+                continue; // wrong number of arguments
+            }
+
+            boolean matches = true;
+
+            for (int i = 0; i < arguments.size(); i++) {
+                Type argType = argTypes.get(i);
+                Parameter param = method.getParameters().get(i);
+
+                if (argType == null || !typesMatch(param.getType(), argType)) {
+                    matches = false;
+                    break;
+                }
+
+                // Reference parameter requires lvalue argument
+                if (param.isReference() && !argIsLValue.get(i)) {
+                    matches = false;
+                    break;
+                }
+            }
+
+            if (matches) {
+                viableOverloads.add(method);
+            }
+        }
+
+        if (viableOverloads.isEmpty()) {
+            return null; // no matching method
+        }
+
+        if (viableOverloads.size() == 1) {
+            return viableOverloads.get(0); // unambiguous
+        }
+
+        // Multiple viable overloads - just return first one (could add ambiguity check like functions)
         return viableOverloads.get(0);
     }
 }
