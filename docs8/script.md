@@ -165,3 +165,23 @@ Passieren im semanticAnalyzer, der macht auf dem AST semantische Checks auf zb t
 
 - Zeige: `Main.java:396-409` - Erkennung und Ausgabe
 - Zeige: `Main.java:423-444` - `printValue()` mit typ-spezifischer Formatierung
+
+
+## 3. Anleitung (~2 Min)
+
+- [ ] Wie wird das Projekt gebaut? (Build-Befehl)
+- [ ] Wie wird der Interpreter gestartet?
+- [ ] Wie lädt man eine Datei?
+- [ ] Wie nutzt man die REPL?
+
+---
+
+## 4. Demo (~2 Min)
+
+Live-Demonstration mit C++-Codebeispielen:
+
+- [ ] Einfaches Programm ausführen
+- [ ] Funktionen und Überladung zeigen
+- [ ] Klassen mit Vererbung
+- [ ] Polymorphie mit `virtual` und Referenzen
+- [ ] REPL-Interaktion
