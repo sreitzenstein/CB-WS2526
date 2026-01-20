@@ -356,7 +356,6 @@ public class Main {
             symbolTableBuilder.build(program);
 
             // immediately remove dummy function so it can be redefined next time
-            // (must happen before any return, so errors don't leave it registered)
             if (!isDefinition) {
                 symbolTable.getGlobalScope().remove("__repl_dummy__");
             }
