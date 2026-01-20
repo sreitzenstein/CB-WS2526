@@ -328,27 +328,14 @@ Der Interpreter unterstützt NICHT:
 - Compound-Assignments (`+=`, `-=`, etc.)
 - Inkrement/Dekrement (`++`, `--`)
 
-## Entwicklungsstand
-
-- ✅ Grammatik (ANTLR)
-- ✅ AST-Klassen (24 Klassen)
-- ✅ Parser/ASTBuilder
-- ✅ Symboltabellen (8 Klassen)
-- ✅ Semantische Analyse
-- ✅ Tree-Walking Interpreter
-- ✅ Runtime-System (Values, Objects, Environment)
-- ✅ REPL mit Multi-Line-Support
-- ✅ Alle Features implementiert
-
-**Gesamtumfang:** ~4.000 Zeilen Java-Code
 
 ## Tests
 
-Beispiel-Tests befinden sich in `test.cpp` und `../tests/`.
+Beispiel-Tests befinden sich in `../tests/`.
 
 Test ausführen:
 ```bash
-java -jar interpreter.jar test.cpp
+java -jar interpreter.jar ../tests/pos/P01_vars.cpp
 ```
 
 ## Abhängigkeiten
@@ -356,9 +343,3 @@ java -jar interpreter.jar test.cpp
 - **Java:** Version 21 oder höher
 - **ANTLR Runtime:** 4.13.1 (im `lib/` Verzeichnis enthalten, wird ins Fat JAR eingebettet)
 
-## Dokumentation
-
-Weitere Dokumentation:
-- `AST_DESIGN.md` - Detaillierte AST-Struktur
-- `../aufGutDeutsch.md` - Erklärung auf Deutsch, wie alles funktioniert
-- `../probleme.md` - Gelöste Probleme während der Entwicklung
